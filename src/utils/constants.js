@@ -28,17 +28,17 @@ export const RENDER_DISTANCE = 2;
 export const WORLD_Y_OFFSET = 0;
 
 // ── Time ────────────────────────────────────────────────────
-export const DAY_LENGTH_SECONDS = 600;     // 10-minute day cycle
-export const TIME_START_HOUR = 10;      // start at 10 AM
+export const DAY_LENGTH_SECONDS = 600; // 10-minute day cycle
+export const TIME_START_HOUR = 10; // start at 10 AM
 
 // ── LOD ─────────────────────────────────────────────────────
 export const LOD_DISTANCES = [30, 80, 200];
 
 // ── Performance Tiers ───────────────────────────────────────
 export const QUALITY_TIERS = {
-    LOW: { shadowMap: false, pixelRatio: 1.0, renderScale: 0.65 },
-    MEDIUM: { shadowMap: true, pixelRatio: 1.0, renderScale: 0.85 },
-    HIGH: { shadowMap: true, pixelRatio: 1.0, renderScale: 1.0 },
+  LOW: { shadowMap: false, pixelRatio: 1.0, renderScale: 0.65 },
+  MEDIUM: { shadowMap: true, pixelRatio: 1.0, renderScale: 0.85 },
+  HIGH: { shadowMap: true, pixelRatio: 1.0, renderScale: 1.0 },
 };
 
 // ── Fog ─────────────────────────────────────────────────────
@@ -47,14 +47,14 @@ export const FOG_FAR = 250;
 export const FOG_COLOR = 0xc8d6e5;
 
 // ── Terrain Generation ─────────────────────────────────────
-export const TERRAIN_HEIGHT_SCALE = 78;         // total max height
-export const TERRAIN_CONTINENTAL_SCALE = 0.002;  // broad mountains
+export const TERRAIN_HEIGHT_SCALE = 78; // total max height
+export const TERRAIN_CONTINENTAL_SCALE = 0.002; // broad mountains
 export const TERRAIN_CONTINENTAL_HEIGHT = 60;
-export const TERRAIN_DETAIL_SCALE = 0.01;        // hills / ridges
+export const TERRAIN_DETAIL_SCALE = 0.01; // hills / ridges
 export const TERRAIN_DETAIL_HEIGHT = 15;
-export const TERRAIN_MICRO_SCALE = 0.05;         // small bumps
+export const TERRAIN_MICRO_SCALE = 0.05; // small bumps
 export const TERRAIN_MICRO_HEIGHT = 3;
-export const TERRAIN_POWER_CURVE = 1.6;          // push valleys flat, peaks sharp
+export const TERRAIN_POWER_CURVE = 1.6; // push valleys flat, peaks sharp
 
 // ── Terrain LOD segments ───────────────────────────────────
 export const TERRAIN_SEG_HIGH = 48;
@@ -118,11 +118,16 @@ export const ROCK_COLOR_DARK = 0x4a4a4a;
 // ── Animals ──────────────────────────────────────────────────
 // Mean expected animals per chunk (used as a deterministic seed-driven mean)
 export const ANIMAL_MEAN_COUNTS = {
-    chicken: 8, // medium-high
-    cow: 3,     // medium
-    deer: 2,    // low-medium
-    wolf: 1,    // low
+  chicken: 8, // medium-high
+  cow: 3, // medium
+  deer: 2, // low-medium
+  wolf: 1, // low
+};
+export const ANIMAL_SIZE = {
+  cow: 0.004,
+  chicken: 0.004,
+  deer: 0.3,
+  wolf: 0.1,
 };
 export const ANIMAL_MAX_PER_CHUNK = 24;
 export const ANIMAL_SPACING = 6; // sampling spacing for placement jitter
-

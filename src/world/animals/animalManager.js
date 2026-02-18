@@ -17,13 +17,15 @@ export class AnimalManager {
      * @param {AssetLoader|null} assetLoader
      * @param {number} [seed=42]
      */
-    constructor(scene, terrainGen, assetLoader = null, seed = 42) {
+    constructor(scene, terrainGen, assetLoader = null, seed = 42, options = {}) {
         this.scene = scene;
         this._terrain = terrainGen;
         this._noise = new SimplexNoise(seed * 2.71828);
         this._chunkAnimals = new Map();
         this._assetLoader = assetLoader;
         this._models = {}; // loaded GLTF scenes by type
+        // per-type scale overrides (can be changed at runtime)
+        this._scaleOverrides = options.scaleOverrides || {};
 
         // Attempt to preload models if an asset loader is available
         if (this._assetLoader) {
@@ -55,7 +57,9 @@ export class AnimalManager {
                     mesh = null;
                 }
             }
-            if (!mesh) mesh = this._createAnimalMesh(p.type, p.scale);
+            const finalScale = this.getAnimalScale(p.type) * p.scale;
+            if (!mesh) mesh = this._createAnimalMesh(p.type, finalScale);
+            else mesh.scale.set(finalScale, finalScale, finalScale);
             mesh.position.set(p.x, p.y + 0.05, p.z);
             mesh.rotation.y = p.rotation;
             mesh.userData = { type: p.type };
@@ -187,6 +191,68 @@ export class AnimalManager {
             case 'wolf': return 0.9;
             case 'chicken': return 0.6;
             default: return 1.0;
+        }
+    }
+
+    /**
+     * Get the effective scale multiplier for an animal type (base * override)
+     * @param {string} type
+     */
+    getAnimalScale(type) {
+        const base = this._animalScaleFor(type);
+        const over = this._scaleOverrides[type];
+        if (typeof over === 'number') return over;
+        return base;
+    }
+
+    /**
+     * Set a runtime scale override for an animal type and update existing animals.
+     * @param {string} type
+     * @param {number} scaleMultiplier
+     */
+    setAnimalScale(type, scaleMultiplier) {
+        this._scaleOverrides[type] = scaleMultiplier;
+        // update existing spawned animals
+        for (const [key, group] of this._chunkAnimals) {
+            if (!group) continue;
+            for (const m of group.children) {
+                if (m.userData && m.userData.type === type) {
+                    // Existing meshes were created with finalScale = base * placementScale.
+                    // Our override represents the new 'base' multiplier, so set final scale = override * basePlacement.
+                    const base = this._animalScaleFor(type);
+                    const final = scaleMultiplier * base;
+                    m.scale.set(final, final, final);
+                }
+            }
+        }
+    }
+
+    /**
+     * Auto-fit a loaded model type to a target world height (meters) by computing
+     * a scale override based on the model bounding box and current base scale.
+     * Returns the computed override multiplier or null on failure.
+     * @param {string} type
+     * @param {number} targetHeight
+     */
+    autoFitTypeHeight(type, targetHeight = 1.2) {
+        const model = this._models[type];
+        if (!model) {
+            console.warn(`[AnimalManager] autoFit: model for ${type} not loaded`);
+            return null;
+        }
+        try {
+            const box = new THREE.Box3().setFromObject(model);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+            const modelHeight = size.y || Math.max(size.x, size.z) || 1;
+            const base = this._animalScaleFor(type);
+            const override = targetHeight / (modelHeight * base);
+            this.setAnimalScale(type, override);
+            console.debug('[AnimalManager] autoFitTypeHeight', type, { modelHeight, base, override, targetHeight });
+            return override;
+        } catch (e) {
+            console.warn('[AnimalManager] autoFit failed', e);
+            return null;
         }
     }
 
