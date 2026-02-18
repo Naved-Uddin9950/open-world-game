@@ -55,10 +55,25 @@ export class Collision {
     /**
      * Simple AABB overlap test stub for future obstacle collision.
      * @param {THREE.Box3} playerBox
-     * @returns {boolean}
+     * @returns {THREE.Object3D|null}  The collider hit, or null if none
      */
     checkObstacles(playerBox) {
-        // TODO: implement spatial-hash or octree-based obstacle check
-        return false;
+        // Brute-force AABB intersection against registered colliders.
+        // Use setFromObject so colliders' world matrices are considered.
+        for (let i = 0; i < this.colliders.length; i++) {
+            const c = this.colliders[i];
+            if (!c) continue;
+
+            // Compute collider box in world space
+            const box = new THREE.Box3();
+            box.setFromObject(c);
+            if (box.isEmpty()) continue;
+
+            if (box.intersectsBox(playerBox)) {
+                return c;
+            }
+        }
+
+        return null;
     }
 }

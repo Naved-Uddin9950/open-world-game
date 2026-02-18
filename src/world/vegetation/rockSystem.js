@@ -74,6 +74,26 @@ export class RockSystem {
             group.add(bMesh);
         }
 
+        // Create collider meshes for rocks (simple spheres approximating boulders/pebbles)
+        const colliderMat = new THREE.MeshBasicMaterial({ visible: false });
+        const sphereGeo = new THREE.SphereGeometry(0.5, 8, 6);
+        const rockColliders = [];
+
+        // boulders colliders
+        for (let i = 0; i < boulders.length && i < ROCK_MAX_PER_CHUNK; i++) {
+            const p = boulders[i];
+            const col = new THREE.Mesh(sphereGeo, colliderMat);
+            col.name = 'rockCollider';
+            // approximate size and position (bMesh used p.y - p.scale*0.2 above)
+            col.position.set(p.x, p.y, p.z);
+            const s = p.scale;
+            col.scale.set(s, s, s);
+            // let Three update world matrices; we'll ensure update when registering
+            col.matrixAutoUpdate = true;
+            rockColliders.push(col);
+            group.add(col);
+        }
+
         if (pebbles.length > 0) {
             const pMesh = new THREE.InstancedMesh(
                 pebbleGeo, pebbleMaterial,
@@ -95,6 +115,22 @@ export class RockSystem {
             pMesh.instanceMatrix.needsUpdate = true;
             group.add(pMesh);
         }
+
+        // pebble colliders
+        const pebblesList = pebbles;
+        for (let i = 0; i < pebblesList.length && i < ROCK_MAX_PER_CHUNK; i++) {
+            const p = pebblesList[i];
+            const col = new THREE.Mesh(sphereGeo, colliderMat);
+            col.name = 'rockCollider';
+            col.position.set(p.x, p.y, p.z);
+            const s = p.scale;
+            col.scale.set(s, s, s);
+            col.matrixAutoUpdate = true;
+            rockColliders.push(col);
+            group.add(col);
+        }
+
+        group.userData.colliders = rockColliders;
 
         return group;
     }

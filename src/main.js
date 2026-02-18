@@ -47,7 +47,7 @@ class Engine {
         this.gameScene.add(this.player.player);
 
         // ── World ───────────────────────────────────────────
-        this.worldManager = new WorldManager(this.gameScene.raw);
+        this.worldManager = new WorldManager(this.gameScene.raw, this.player);
 
         // ── Systems ─────────────────────────────────────────
         this.dayNightCycle = new DayNightCycle(this.gameScene.raw);

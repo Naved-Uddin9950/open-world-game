@@ -77,7 +77,9 @@ export class ForestManager {
         this.scene.add(grass);
         this.scene.add(rocks);
 
-        this._chunkVegetation.set(key, { trees, grass, rocks });
+        const veg = { trees, grass, rocks };
+        this._chunkVegetation.set(key, veg);
+        return veg;
     }
 
     /**
@@ -89,7 +91,8 @@ export class ForestManager {
         const key = `${cx},${cz}`;
         const veg = this._chunkVegetation.get(key);
         if (!veg) return;
-
+        // Remove from scene and dispose, but return the veg object so callers
+        // can unregister colliders before disposal.
         this.scene.remove(veg.trees);
         this.scene.remove(veg.grass);
         this.scene.remove(veg.rocks);
@@ -99,6 +102,7 @@ export class ForestManager {
         this._rockSystem.dispose(veg.rocks);
 
         this._chunkVegetation.delete(key);
+        return veg;
     }
 
     /**

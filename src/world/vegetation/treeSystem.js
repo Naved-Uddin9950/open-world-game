@@ -205,6 +205,39 @@ export class TreeSystem {
         // Keep placement data so LOD can be computed per-instance (nearest tree to camera)
         group.userData.placements = placements;
 
+        // Create simple invisible colliders for each tree instance.
+        // These are lightweight Meshes (cylinders) used only for physics/raycasting.
+        const colliderMat = new THREE.MeshBasicMaterial({ visible: false });
+        const colliderGeo = new THREE.CylinderGeometry(1, 1, 1, 6);
+        const colliders = [];
+
+        for (let i = 0; i < count; i++) {
+            const p = placements[i];
+
+            // compute instance scale (same logic as above)
+            let instanceScale = p.scale;
+            if (p.desiredHeight !== undefined) {
+                instanceScale = p.desiredHeight / highModelHeight;
+            }
+            instanceScale = Math.max(instanceScale, TREE_MIN_SCALE);
+            instanceScale = Math.min(instanceScale, TREE_MAX_SCALE * 10);
+
+            const modelHeight = highModelHeight * instanceScale;
+            const trunkRadius = 0.25 * instanceScale; // approximate trunk radius
+
+            const col = new THREE.Mesh(colliderGeo, colliderMat);
+            col.name = 'treeCollider';
+            col.position.set(p.x, p.y + modelHeight / 2, p.z);
+            // Make cylinder height match modelHeight exactly
+            col.scale.set(trunkRadius, modelHeight, trunkRadius);
+            // Allow Three to compute world matrices; we'll update on registration
+            col.matrixAutoUpdate = true;
+            colliders.push(col);
+            group.add(col);
+        }
+
+        group.userData.colliders = colliders;
+
         return group;
     }
 

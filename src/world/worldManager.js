@@ -7,10 +7,11 @@ import { ChunkLoader } from './chunkLoader.js';
 import { ForestManager } from './vegetation/forestManager.js';
 
 export class WorldManager {
-    constructor(scene, seed = 42) {
+    constructor(scene, player = null, seed = 42) {
         this.scene = scene;
         this.chunkLoader = new ChunkLoader(seed);
         this.forest = new ForestManager(scene, this.chunkLoader.generator, seed);
+        this._player = player; // FirstPersonController instance (optional)
         this.activeChunks = new Map();
         this._lastChunkX = null;
         this._lastChunkZ = null;
@@ -69,7 +70,19 @@ export class WorldManager {
         const lod = this.chunkLoader.createChunk(cx, cz);
         this.scene.add(lod);
         this.activeChunks.set(key, lod);
-        this.forest.loadChunkVegetation(cx, cz);
+        // Load vegetation for this chunk and register any colliders with the player
+        const veg = this.forest.loadChunkVegetation(cx, cz);
+        if (veg && this._player && typeof this._player.addColliders === 'function') {
+            const colliders = [];
+            if (veg.trees && veg.trees.userData && veg.trees.userData.colliders) colliders.push(...veg.trees.userData.colliders);
+            if (veg.rocks && veg.rocks.userData && veg.rocks.userData.colliders) colliders.push(...veg.rocks.userData.colliders);
+            // Ensure collider world matrices are computed now so collision checks
+            // performed before a render have valid world transforms.
+            for (const c of colliders) {
+                if (c && typeof c.updateMatrixWorld === 'function') c.updateMatrixWorld(true);
+            }
+            if (colliders.length > 0) this._player.addColliders(...colliders);
+        }
     }
 
     _unloadChunk(key, chunkObj) {
@@ -77,7 +90,14 @@ export class WorldManager {
         this.chunkLoader.disposeChunk(chunkObj);
         this.activeChunks.delete(key);
         const [cx, cz] = key.split(',').map(Number);
-        this.forest.unloadChunkVegetation(cx, cz);
+        // Unload vegetation and unregister colliders from player
+        const veg = this.forest.unloadChunkVegetation(cx, cz);
+        if (veg && this._player && typeof this._player.removeColliders === 'function') {
+            const colliders = [];
+            if (veg.trees && veg.trees.userData && veg.trees.userData.colliders) colliders.push(...veg.trees.userData.colliders);
+            if (veg.rocks && veg.rocks.userData && veg.rocks.userData.colliders) colliders.push(...veg.rocks.userData.colliders);
+            if (colliders.length > 0) this._player.removeColliders(...colliders);
+        }
     }
 
     getHeightAt(worldX, worldZ) {

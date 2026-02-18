@@ -123,6 +123,38 @@ export class FirstPersonController {
         // Compute displacement (movement now uses camera world vectors)
         const displacement = this.movement.update(dt, this.camera);
 
+        // Obstacle collision: test horizontal movement against registered colliders
+        const radius = 0.35; // player collision radius (meters)
+        const currentX = this.player.position.x;
+        const currentZ = this.player.position.z;
+        const feetY = this.player.position.y - PLAYER_HEIGHT;
+
+        // Attempt X movement
+        const attemptX = currentX + displacement.x;
+        const boxX = new THREE.Box3(
+            new THREE.Vector3(attemptX - radius, feetY, currentZ - radius),
+            new THREE.Vector3(attemptX + radius, feetY + PLAYER_HEIGHT, currentZ + radius),
+        );
+        const hitX = this.collision.checkObstacles(boxX);
+
+        // Attempt Z movement
+        const attemptZ = currentZ + displacement.z;
+        const boxZ = new THREE.Box3(
+            new THREE.Vector3(currentX - radius, feetY, attemptZ - radius),
+            new THREE.Vector3(currentX + radius, feetY + PLAYER_HEIGHT, attemptZ + radius),
+        );
+        const hitZ = this.collision.checkObstacles(boxZ);
+
+        // Resolve simple sliding: allow movement on one axis if the other is blocked
+        if (hitX && hitZ) {
+            displacement.x = 0;
+            displacement.z = 0;
+        } else if (hitX) {
+            displacement.x = 0;
+        } else if (hitZ) {
+            displacement.z = 0;
+        }
+
         // Apply horizontal
         this.player.position.x += displacement.x;
         this.player.position.z += displacement.z;
@@ -160,6 +192,11 @@ export class FirstPersonController {
     /** Register ground / obstacle colliders. */
     addColliders(...objects) {
         this.collision.addColliders(...objects);
+    }
+
+    /** Unregister colliders previously added. */
+    removeColliders(...objects) {
+        this.collision.removeColliders(...objects);
     }
 
     /** Clean up event listeners. */
