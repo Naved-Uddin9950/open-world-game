@@ -73,3 +73,42 @@ export const BIOME_GRASS_MAX = 0.18;
 export const BIOME_DIRT_MAX = 0.38;
 export const BIOME_ROCK_MAX = 0.7;
 export const BIOME_SLOPE_ROCK_THRESHOLD = 0.4;
+
+// ── Vegetation — Trees ─────────────────────────────────────
+export const TREE_DENSITY_GRASS = 0.35;       // probability per sample point
+export const TREE_DENSITY_DIRT = 0.10;
+export const TREE_DENSITY_ROCK = 0.0;
+export const TREE_DENSITY_SNOW = 0.0;
+export const TREE_SPACING = 5;           // min world units between sample points
+export const TREE_MAX_PER_CHUNK = 120;
+export const TREE_LOD_HIGH_DIST = 80;
+export const TREE_LOD_MED_DIST = 180;
+export const TREE_LOD_BILL_DIST = 350;
+export const TREE_MIN_SCALE = 0.7;
+export const TREE_MAX_SCALE = 1.4;
+export const TREE_TRUNK_COLOR = 0x5c3a1e;
+export const TREE_CANOPY_COLORS = [0x2d6b1b, 0x3a7d2a, 0x1e5a10, 0x4a8d3a];
+export const TREE_SLOPE_MAX = 0.35;        // no trees on steep slopes
+
+// ── Vegetation — Grass ─────────────────────────────────────
+export const GRASS_DENSITY_GRASS = 0.6;
+export const GRASS_DENSITY_DIRT = 0.15;
+export const GRASS_SPACING = 1.5;
+export const GRASS_MAX_PER_CHUNK = 400;
+export const GRASS_RENDER_DIST = 60;          // world units from camera
+export const GRASS_HEIGHT_MIN = 0.3;
+export const GRASS_HEIGHT_MAX = 0.8;
+export const GRASS_BASE_COLOR = 0x2d5a1b;
+export const GRASS_TIP_COLOR = 0x7ab648;
+
+// ── Vegetation — Rocks ─────────────────────────────────────
+export const ROCK_DENSITY_GRASS = 0.04;
+export const ROCK_DENSITY_DIRT = 0.12;
+export const ROCK_DENSITY_ROCK = 0.25;
+export const ROCK_SPACING = 8;
+export const ROCK_MAX_PER_CHUNK = 40;
+export const ROCK_BOULDER_SCALE = [1.2, 2.5];  // [min, max]
+export const ROCK_PEBBLE_SCALE = [0.2, 0.6];
+export const ROCK_COLOR = 0x6b6b6b;
+export const ROCK_COLOR_DARK = 0x4a4a4a;
+
