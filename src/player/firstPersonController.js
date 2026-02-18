@@ -178,12 +178,13 @@ export class FirstPersonController {
                 // Player is at or below the target — snap up and land
                 this.player.position.y = targetY;
                 this.movement.land(groundY);
-            } else if (drop <= MAX_STEP_DOWN) {
-                // Small step down: snap to ground and land
+            } else if (drop <= MAX_STEP_DOWN && this.movement.velocity.y <= 0) {
+                // Small step down while falling: snap to ground and land
+                // (don't snap when the player is moving upward from a jump)
                 this.player.position.y = targetY;
                 this.movement.land(groundY);
             } else {
-                // Large drop: allow falling
+                // Large drop or moving upward: allow falling or rising
                 this.movement.isGrounded = false;
             }
         } else {
@@ -192,7 +193,8 @@ export class FirstPersonController {
                 const targetY = groundY + PLAYER_HEIGHT;
                 const drop = this.player.position.y - targetY;
 
-                if (drop <= MAX_STEP_DOWN) {
+                if (drop <= MAX_STEP_DOWN && this.movement.velocity.y <= 0) {
+                    // Only snap to ground for small drops when player is not rising
                     this.player.position.y = targetY;
                     this.movement.land(groundY);
                 } else {
