@@ -20,6 +20,7 @@ import { WorldManager } from './world/worldManager.js';
 import { DayNightCycle } from './systems/dayNightCycle.js';
 import { LODSystem } from './systems/lodSystem.js';
 import { PerformanceMonitor } from './systems/performanceMonitor.js';
+import { AutoQualitySystem } from './systems/autoQualitySystem.js';
 
 // ═══════════════════════════════════════════════════════════
 // Engine initialisation
@@ -33,7 +34,7 @@ class Engine {
         this.canvas = document.getElementById('game-canvas');
 
         // ── Core modules ────────────────────────────────────
-        this.renderer = new EngineRenderer(this.canvas, 'MEDIUM');
+        this.renderer = new EngineRenderer(this.canvas, 'LOW');
         this.gameScene = new GameScene();
         this.gameCamera = new GameCamera();
         this.assetLoader = new AssetLoader();
@@ -51,7 +52,8 @@ class Engine {
         // ── Systems ─────────────────────────────────────────
         this.dayNightCycle = new DayNightCycle(this.gameScene.raw);
         this.lodSystem = new LODSystem();
-        this.perfMonitor = new PerformanceMonitor();
+        this.perfMonitor = new PerformanceMonitor({ targetFPS: 30 });
+        this.autoQuality = new AutoQualitySystem(this.renderer, this.perfMonitor);
 
         // Show FPS overlay
         this.perfMonitor.showHUD(true);
@@ -78,6 +80,11 @@ class Engine {
 
     /** Fixed-step update. */
     _update(dt) {
+        // Auto quality adjustment
+        this.autoQuality.update(dt);
+        const quality = this.autoQuality.getSettings();
+        this.worldManager.setRenderDistance(quality.renderDist);
+
         // Player
         this.player.update(dt);
 

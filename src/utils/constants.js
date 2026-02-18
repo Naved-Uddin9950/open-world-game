@@ -4,10 +4,10 @@
 
 // ── Renderer ────────────────────────────────────────────────
 export const MAX_PIXEL_RATIO = 1.5;
-export const SHADOW_MAP_SIZE = 1024;
-export const SHADOW_CAMERA_SIZE = 60;
+export const SHADOW_MAP_SIZE = 512;
+export const SHADOW_CAMERA_SIZE = 40;
 export const SHADOW_NEAR = 0.5;
-export const SHADOW_FAR = 200;
+export const SHADOW_FAR = 120;
 
 // ── Camera ──────────────────────────────────────────────────
 export const FOV = 75;
@@ -24,7 +24,7 @@ export const JUMP_FORCE = 5.0;
 
 // ── World / Chunks ──────────────────────────────────────────
 export const CHUNK_SIZE = 64;
-export const RENDER_DISTANCE = 3;       // chunks around player
+export const RENDER_DISTANCE = 2;
 export const WORLD_Y_OFFSET = 0;
 
 // ── Time ────────────────────────────────────────────────────
@@ -32,18 +32,18 @@ export const DAY_LENGTH_SECONDS = 600;     // 10-minute day cycle
 export const TIME_START_HOUR = 10;      // start at 10 AM
 
 // ── LOD ─────────────────────────────────────────────────────
-export const LOD_DISTANCES = [50, 150, 400];
+export const LOD_DISTANCES = [30, 80, 200];
 
 // ── Performance Tiers ───────────────────────────────────────
 export const QUALITY_TIERS = {
-    LOW: { shadowMap: false, pixelRatio: 1.0, renderScale: 0.75 },
-    MEDIUM: { shadowMap: true, pixelRatio: 1.0, renderScale: 1.0 },
-    HIGH: { shadowMap: true, pixelRatio: 1.5, renderScale: 1.0 },
+    LOW: { shadowMap: false, pixelRatio: 1.0, renderScale: 0.65 },
+    MEDIUM: { shadowMap: true, pixelRatio: 1.0, renderScale: 0.85 },
+    HIGH: { shadowMap: true, pixelRatio: 1.0, renderScale: 1.0 },
 };
 
 // ── Fog ─────────────────────────────────────────────────────
-export const FOG_NEAR = 80;
-export const FOG_FAR = 350;
+export const FOG_NEAR = 60;
+export const FOG_FAR = 250;
 export const FOG_COLOR = 0xc8d6e5;
 
 // ── Terrain Generation ─────────────────────────────────────
@@ -57,8 +57,8 @@ export const TERRAIN_MICRO_HEIGHT = 3;
 export const TERRAIN_POWER_CURVE = 1.6;          // push valleys flat, peaks sharp
 
 // ── Terrain LOD segments ───────────────────────────────────
-export const TERRAIN_SEG_HIGH = 64;
-export const TERRAIN_SEG_MED = 16;
+export const TERRAIN_SEG_HIGH = 48;
+export const TERRAIN_SEG_MED = 12;
 export const TERRAIN_SEG_LOW = 4;
 
 // ── Biome colours (hex) ────────────────────────────────────
@@ -75,39 +75,39 @@ export const BIOME_ROCK_MAX = 0.7;
 export const BIOME_SLOPE_ROCK_THRESHOLD = 0.4;
 
 // ── Vegetation — Trees ─────────────────────────────────────
-export const TREE_DENSITY_GRASS = 0.35;       // probability per sample point
-export const TREE_DENSITY_DIRT = 0.10;
+export const TREE_DENSITY_GRASS = 0.25;
+export const TREE_DENSITY_DIRT = 0.08;
 export const TREE_DENSITY_ROCK = 0.0;
 export const TREE_DENSITY_SNOW = 0.0;
-export const TREE_SPACING = 5;           // min world units between sample points
-export const TREE_MAX_PER_CHUNK = 120;
-export const TREE_LOD_HIGH_DIST = 80;
-export const TREE_LOD_MED_DIST = 180;
-export const TREE_LOD_BILL_DIST = 350;
+export const TREE_SPACING = 6;
+export const TREE_MAX_PER_CHUNK = 80;
+export const TREE_LOD_HIGH_DIST = 50;
+export const TREE_LOD_MED_DIST = 120;
+export const TREE_LOD_BILL_DIST = 250;
 export const TREE_MIN_SCALE = 0.7;
 export const TREE_MAX_SCALE = 1.4;
 export const TREE_TRUNK_COLOR = 0x5c3a1e;
 export const TREE_CANOPY_COLORS = [0x2d6b1b, 0x3a7d2a, 0x1e5a10, 0x4a8d3a];
-export const TREE_SLOPE_MAX = 0.35;        // no trees on steep slopes
+export const TREE_SLOPE_MAX = 0.35;
 
 // ── Vegetation — Grass ─────────────────────────────────────
-export const GRASS_DENSITY_GRASS = 0.6;
-export const GRASS_DENSITY_DIRT = 0.15;
-export const GRASS_SPACING = 1.5;
-export const GRASS_MAX_PER_CHUNK = 400;
-export const GRASS_RENDER_DIST = 60;          // world units from camera
+export const GRASS_DENSITY_GRASS = 0.4;
+export const GRASS_DENSITY_DIRT = 0.1;
+export const GRASS_SPACING = 2;
+export const GRASS_MAX_PER_CHUNK = 250;
+export const GRASS_RENDER_DIST = 40;
 export const GRASS_HEIGHT_MIN = 0.3;
 export const GRASS_HEIGHT_MAX = 0.8;
 export const GRASS_BASE_COLOR = 0x2d5a1b;
 export const GRASS_TIP_COLOR = 0x7ab648;
 
 // ── Vegetation — Rocks ─────────────────────────────────────
-export const ROCK_DENSITY_GRASS = 0.04;
-export const ROCK_DENSITY_DIRT = 0.12;
-export const ROCK_DENSITY_ROCK = 0.25;
-export const ROCK_SPACING = 8;
-export const ROCK_MAX_PER_CHUNK = 40;
-export const ROCK_BOULDER_SCALE = [1.2, 2.5];  // [min, max]
+export const ROCK_DENSITY_GRASS = 0.03;
+export const ROCK_DENSITY_DIRT = 0.08;
+export const ROCK_DENSITY_ROCK = 0.15;
+export const ROCK_SPACING = 10;
+export const ROCK_MAX_PER_CHUNK = 25;
+export const ROCK_BOULDER_SCALE = [1.2, 2.5];
 export const ROCK_PEBBLE_SCALE = [0.2, 0.6];
 export const ROCK_COLOR = 0x6b6b6b;
 export const ROCK_COLOR_DARK = 0x4a4a4a;
