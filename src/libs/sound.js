@@ -71,16 +71,3 @@ export const wolfSound = () => {
   playNote("D4", 0.5);
   playNote("F4", 0.5);
 };
-
-// tone js sounds
-const jumpSynth = new Tone.Synth().toDestination();
-
-export const jumpSound2 = () => {
-  jumpSynth.triggerAttackRelease("C5", "8n");
-};
-
-const hitSynth = new Tone.MembraneSynth().toDestination();
-
-export const hitSound2 = () => {
-  hitSynth.triggerAttackRelease("C2", "8n");
-};
