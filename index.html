@@ -103,8 +103,12 @@
 
     <!-- Overlay hide on pointer lock -->
     <script>
+        const canvas = document.getElementById('game-canvas');
+        const overlay = document.getElementById('overlay');
+        
+        overlay.addEventListener('click', () => canvas.requestPointerLock());
+        
         document.addEventListener('pointerlockchange', () => {
-            const overlay = document.getElementById('overlay');
             if (document.pointerLockElement) {
                 overlay.classList.add('hidden');
             } else {
