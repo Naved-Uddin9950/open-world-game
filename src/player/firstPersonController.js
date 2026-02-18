@@ -6,7 +6,6 @@ import { MOUSE_SENSITIVITY, PLAYER_HEIGHT } from "../utils/constants.js";
 import { clamp } from "../utils/math.js";
 import { Movement } from "./movement.js";
 import { Collision } from "./collision.js";
-import { jumpSound } from "../libs/sound.js";
 
 export class FirstPersonController {
   /**
@@ -226,7 +225,6 @@ export class FirstPersonController {
         // (don't snap when the player is moving upward from a jump)
         this.player.position.y = targetY;
         this.movement.land(groundY);
-        jumpSound();
       } else {
         // Large drop or moving upward: allow falling or rising
         this.movement.isGrounded = false;
