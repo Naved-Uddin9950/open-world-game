@@ -19,6 +19,8 @@ import {
     TREE_MAX_PER_CHUNK,
     TREE_MIN_SCALE,
     TREE_MAX_SCALE,
+    TREE_MIN_HEIGHT_FACTOR,
+    TREE_MAX_HEIGHT_FACTOR,
     TREE_SLOPE_MAX,
     GRASS_DENSITY_GRASS,
     GRASS_DENSITY_DIRT,
@@ -33,6 +35,7 @@ import {
     ROCK_BOULDER_SCALE,
     ROCK_PEBBLE_SCALE,
 } from '../../utils/constants.js';
+import { PLAYER_HEIGHT } from '../../utils/constants.js';
 
 export class ForestManager {
     /**
@@ -113,7 +116,7 @@ export class ForestManager {
             const dz = cameraPos.z - centreZ;
             const dist = Math.sqrt(dx * dx + dz * dz);
 
-            this._treeSystem.updateLOD(veg.trees, dist);
+            this._treeSystem.updateLOD(veg.trees, cameraPos);
             this._grassSystem.updateVisibility(veg.grass, dist);
         }
     }
@@ -195,12 +198,18 @@ export class ForestManager {
                 const roll = this._hash(worldX, worldZ, 300);
 
                 if (roll < treeDensity) {
-                    const scale = TREE_MIN_SCALE + this._hash(worldX, worldZ, 400) * (TREE_MAX_SCALE - TREE_MIN_SCALE);
+                    // Compute tree scale so final tree height is a multiple of PLAYER_HEIGHT
+                    // Base model height approximated from treeSystem geometry (trunk + canopy top)
+                    const BASE_TREE_MODEL_HEIGHT = 4.8; // model units
+                    const heightFactor = TREE_MIN_HEIGHT_FACTOR + this._hash(worldX, worldZ, 400) * (TREE_MAX_HEIGHT_FACTOR - TREE_MIN_HEIGHT_FACTOR);
+                    const desiredHeight = PLAYER_HEIGHT * heightFactor;
+
                     placements.push({
                         x: worldX,
                         y: height,
                         z: worldZ,
-                        scale,
+                        // store desired world height; actual scale is computed from model bbox in TreeSystem
+                        desiredHeight,
                         rotation: this._hash(worldX, worldZ, 500) * Math.PI * 2,
                         colorIdx: Math.floor(this._hash(worldX, worldZ, 600) * 4),
                     });

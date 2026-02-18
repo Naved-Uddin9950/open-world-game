@@ -44,11 +44,12 @@ const treeMaterialHigh = new THREE.MeshStandardMaterial({
     metalness: 0.0,
 });
 const treeMaterialMed = treeMaterialHigh.clone();
+// Billboard material is hidden by default to avoid large flat 'aura' planes
 const billMaterial = new THREE.MeshBasicMaterial({
     color: 0x2d6b1b,
     side: THREE.DoubleSide,
     transparent: true,
-    opacity: 0.9,
+    opacity: 0.0,
 });
 
 /**
@@ -131,52 +132,85 @@ export class TreeSystem {
         const highMesh = new THREE.InstancedMesh(highGeo, treeMaterialHigh, count);
         highMesh.castShadow = true;
         highMesh.receiveShadow = false;
-        highMesh.frustumCulled = true;
+        // InstancedMesh frustum culling can incorrectly cull parts of instances
+        // (canopy/trunk mismatch). Disable per-mesh frustum culling for stability.
+        highMesh.frustumCulled = false;
 
         const medMesh = new THREE.InstancedMesh(medGeo, treeMaterialMed, count);
         medMesh.castShadow = false;
         medMesh.receiveShadow = false;
-        medMesh.frustumCulled = true;
+        medMesh.frustumCulled = false;
 
-        const billMesh = new THREE.InstancedMesh(billGeo, billMaterial, count);
-        billMesh.castShadow = false;
-        billMesh.receiveShadow = false;
-        billMesh.frustumCulled = true;
+        // Billboard LOD removed — use high/med instanced meshes only to avoid
+        // large flat green quads and simplify shading.
+
+            // Compute model height from the high & med geometries so we can scale instances
+            highGeo.computeBoundingBox();
+            medGeo.computeBoundingBox();
+
+            const highBBox = highGeo.boundingBox;
+            const medBBox = medGeo.boundingBox;
+
+            const highModelHeight = highBBox ? (highBBox.max.y - highBBox.min.y) : 4.8;
+            const medModelHeight = medBBox ? (medBBox.max.y - medBBox.min.y) : 4.6;
+
+            // Debug: print model heights once per chunk
+            console.debug('[TreeSystem] modelHeights', { highModelHeight, medModelHeight, count });
 
         for (let i = 0; i < count; i++) {
             const p = placements[i];
-
             _dummy.position.set(p.x, p.y, p.z);
             _dummy.rotation.set(0, p.rotation, 0);
-            _dummy.scale.setScalar(p.scale);
+
+            // If placement specifies a desiredHeight (world units), compute uniform scale
+            let instanceScale = p.scale;
+            if (p.desiredHeight !== undefined) {
+                    instanceScale = p.desiredHeight / highModelHeight;
+            }
+            // Fallback to previous min/max limits
+            instanceScale = Math.max(instanceScale, TREE_MIN_SCALE);
+            instanceScale = Math.min(instanceScale, TREE_MAX_SCALE * 10); // allow larger trees if needed
+
+            _dummy.scale.setScalar(instanceScale);
             _dummy.updateMatrix();
 
             highMesh.setMatrixAt(i, _dummy.matrix);
             medMesh.setMatrixAt(i, _dummy.matrix);
-            billMesh.setMatrixAt(i, _dummy.matrix);
 
             // Vary canopy colour per instance
             _color.setHex(TREE_CANOPY_COLORS[p.colorIdx % TREE_CANOPY_COLORS.length]);
-            highMesh.setColorAt(i, _color);
-            medMesh.setColorAt(i, _color);
+            // Per-instance colour tinting removed. Vertex colours are baked into
+            // the merged geometries (trunk + canopy) to avoid tinting the trunk
+            // when varying canopy colours per-instance.
+
+                // Debug: log first few instances' computed values to console for inspection
+                if (i < 6) {
+                    console.debug('[TreeSystem] instance', i, {
+                        pos: { x: p.x, y: p.y, z: p.z },
+                        desiredHeight: p.desiredHeight,
+                        instanceScale,
+                        canopyColorIdx: p.colorIdx,
+                    });
+                }
         }
+
+            // debug helper removed
 
         highMesh.instanceMatrix.needsUpdate = true;
         medMesh.instanceMatrix.needsUpdate = true;
-        billMesh.instanceMatrix.needsUpdate = true;
-        if (highMesh.instanceColor) highMesh.instanceColor.needsUpdate = true;
-        if (medMesh.instanceColor) medMesh.instanceColor.needsUpdate = true;
+        // billMesh removed — only update high/med
+        // No per-instance colours used, skip instanceColor updates
 
-        // Store LOD distances for manual switching
+        // Store LOD distances for manual switching (high / med)
         highMesh.userData.lodMax = TREE_LOD_HIGH_DIST;
         medMesh.userData.lodMin = TREE_LOD_HIGH_DIST;
         medMesh.userData.lodMax = TREE_LOD_MED_DIST;
-        billMesh.userData.lodMin = TREE_LOD_MED_DIST;
-        billMesh.userData.lodMax = TREE_LOD_BILL_DIST;
 
-        group.add(highMesh, medMesh, billMesh);
+        group.add(highMesh, medMesh);
         group.userData.isVegetation = true;
         group.userData.type = 'trees';
+        // Keep placement data so LOD can be computed per-instance (nearest tree to camera)
+        group.userData.placements = placements;
 
         return group;
     }
@@ -186,14 +220,36 @@ export class TreeSystem {
      * @param {THREE.Group} treeGroup
      * @param {number} distToCamera  Distance from chunk centre to camera
      */
-    updateLOD(treeGroup, distToCamera) {
+    /**
+     * Update LOD visibility based on camera position. Uses nearest-instance distance
+     * so trees switch to high detail when the player approaches any tree in the chunk.
+     * @param {THREE.Group} treeGroup
+     * @param {THREE.Vector3} cameraPos
+     */
+    updateLOD(treeGroup, cameraPos) {
         const children = treeGroup.children;
-        if (children.length < 3) return;
+        // Support two LOD children: high and med
+        if (children.length < 2) return;
 
-        // High / Med / Billboard
-        children[0].visible = distToCamera < TREE_LOD_HIGH_DIST;
-        children[1].visible = distToCamera >= TREE_LOD_HIGH_DIST && distToCamera < TREE_LOD_MED_DIST;
-        children[2].visible = distToCamera >= TREE_LOD_MED_DIST && distToCamera < TREE_LOD_BILL_DIST;
+        // Compute nearest horizontal distance from camera to any placement in this group.
+        const placements = treeGroup.userData.placements;
+        let dist = Infinity;
+        if (placements && placements.length) {
+            for (let i = 0; i < placements.length; i++) {
+                const p = placements[i];
+                const dx = cameraPos.x - p.x;
+                const dz = cameraPos.z - p.z;
+                const d = Math.sqrt(dx * dx + dz * dz);
+                if (d < dist) dist = d;
+            }
+        } else {
+            // Fallback: use chunk centre distance stored on medMesh userData if present
+            dist = cameraPos.distanceTo(treeGroup.position || new THREE.Vector3());
+        }
+
+        // High / Med
+        children[0].visible = dist < TREE_LOD_HIGH_DIST;
+        children[1].visible = dist >= TREE_LOD_HIGH_DIST && dist < TREE_LOD_MED_DIST;
     }
 
     /**

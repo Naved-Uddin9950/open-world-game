@@ -15,7 +15,7 @@ export const NEAR_CLIP = 0.1;
 export const FAR_CLIP = 1000;
 
 // ── Player ──────────────────────────────────────────────────
-export const PLAYER_HEIGHT = 1.7;
+export const PLAYER_HEIGHT = 1;
 export const PLAYER_SPEED = 5.0;
 export const PLAYER_SPRINT_MULT = 1.8;
 export const MOUSE_SENSITIVITY = 0.002;
@@ -84,8 +84,12 @@ export const TREE_MAX_PER_CHUNK = 80;
 export const TREE_LOD_HIGH_DIST = 50;
 export const TREE_LOD_MED_DIST = 120;
 export const TREE_LOD_BILL_DIST = 250;
-export const TREE_MIN_SCALE = 0.7;
-export const TREE_MAX_SCALE = 1.4;
+// Increased default tree scales so trees are roughly 3-4x player height
+export const TREE_MIN_SCALE = 5.0;
+export const TREE_MAX_SCALE = 15.0;
+// Prefer scaling trees relative to the player's height: tree height = PLAYER_HEIGHT * factor
+export const TREE_MIN_HEIGHT_FACTOR = 8.0;
+export const TREE_MAX_HEIGHT_FACTOR = 12.0;
 export const TREE_TRUNK_COLOR = 0x5c3a1e;
 export const TREE_CANOPY_COLORS = [0x2d6b1b, 0x3a7d2a, 0x1e5a10, 0x4a8d3a];
 export const TREE_SLOPE_MAX = 0.35;
