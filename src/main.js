@@ -17,9 +17,7 @@ import { FirstPersonController } from './player/firstPersonController.js';
 import { WorldManager } from './world/worldManager.js';
 
 // ── Systems ─────────────────────────────────────────────────
-import { TimeSystem } from './systems/timeSystem.js';
-import { LightingSystem } from './systems/lightingSystem.js';
-import { SkySystem } from './systems/skySystem.js';
+import { DayNightCycle } from './systems/dayNightCycle.js';
 import { LODSystem } from './systems/lodSystem.js';
 import { PerformanceMonitor } from './systems/performanceMonitor.js';
 
@@ -51,9 +49,7 @@ class Engine {
         this.worldManager = new WorldManager(this.gameScene.raw);
 
         // ── Systems ─────────────────────────────────────────
-        this.timeSystem = new TimeSystem();
-        this.lightingSystem = new LightingSystem(this.gameScene.raw);
-        this.skySystem = new SkySystem(this.gameScene.raw);
+        this.dayNightCycle = new DayNightCycle(this.gameScene.raw);
         this.lodSystem = new LODSystem();
         this.perfMonitor = new PerformanceMonitor();
 
@@ -82,21 +78,14 @@ class Engine {
 
     /** Fixed-step update. */
     _update(dt) {
-        // Time
-        this.timeSystem.update(dt);
-
         // Player
         this.player.update(dt);
 
         // World chunks
         this.worldManager.update(this.player.getPosition());
 
-        // Lighting follows time + player
-        this.lightingSystem.update(this.timeSystem, this.player.getPosition());
-
-        // Sky follows time + camera
-        this.skySystem.update(this.timeSystem);
-        this.skySystem.followCamera(this.player.getPosition());
+        // Day/Night cycle (time, sun, moon, sky, fog)
+        this.dayNightCycle.update(this.player.getPosition());
 
         // LOD — update engine LOD objects + terrain LOD chunks
         this.lodSystem.update(this.gameCamera.raw);
