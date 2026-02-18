@@ -8,12 +8,13 @@ import { ChunkLoader } from './chunkLoader.js';
 export class WorldManager {
     /**
      * @param {THREE.Scene} scene
+     * @param {number}      [seed=42]
      */
-    constructor(scene) {
+    constructor(scene, seed = 42) {
         this.scene = scene;
-        this.chunkLoader = new ChunkLoader();
+        this.chunkLoader = new ChunkLoader(seed);
 
-        /** @type {Map<string, THREE.Object3D>} */
+        /** @type {Map<string, THREE.LOD>} */
         this.activeChunks = new Map();
 
         // Track last player chunk to avoid unnecessary updates
@@ -60,21 +61,32 @@ export class WorldManager {
 
     /** Load and add a chunk to the scene. */
     _loadChunk(cx, cz, key) {
-        const mesh = this.chunkLoader.createChunk(cx, cz);
-        this.scene.add(mesh);
-        this.activeChunks.set(key, mesh);
+        const lod = this.chunkLoader.createChunk(cx, cz);
+        this.scene.add(lod);
+        this.activeChunks.set(key, lod);
     }
 
-    /** Remove and recycle a chunk. */
+    /** Remove and dispose a chunk. */
     _unloadChunk(key, chunkObj) {
         this.scene.remove(chunkObj);
-        this.chunkLoader.recycleChunk(chunkObj);
+        this.chunkLoader.disposeChunk(chunkObj);
         this.activeChunks.delete(key);
     }
 
     /**
-     * Get all active chunk meshes (for collision registration, etc.).
-     * @returns {THREE.Object3D[]}
+     * Query terrain height at a world position.
+     * Used by player controller for ground-following.
+     * @param {number} worldX
+     * @param {number} worldZ
+     * @returns {number}
+     */
+    getHeightAt(worldX, worldZ) {
+        return this.chunkLoader.getHeightAt(worldX, worldZ);
+    }
+
+    /**
+     * Get all active chunk objects (for LOD updates).
+     * @returns {THREE.LOD[]}
      */
     getActiveChunkMeshes() {
         return Array.from(this.activeChunks.values());

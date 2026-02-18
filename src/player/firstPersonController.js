@@ -20,6 +20,10 @@ export class FirstPersonController {
         this.movement = new Movement();
         this.collision = new Collision();
 
+        // ── Terrain height query (set by engine after init) ─
+        /** @type {((x:number,z:number)=>number)|null} */
+        this._getHeightAt = null;
+
         // ── Player container (yaw rotation lives here) ──────
         this.player = new THREE.Object3D();
         this.player.position.set(0, PLAYER_HEIGHT, 0);
@@ -37,6 +41,14 @@ export class FirstPersonController {
         this._onPointerLockChange = this._onPointerLockChange.bind(this);
 
         this._initListeners();
+    }
+
+    /**
+     * Set the terrain height query function.
+     * @param {(x:number,z:number)=>number} fn
+     */
+    setHeightProvider(fn) {
+        this._getHeightAt = fn;
     }
 
     /** Wire up DOM events. */
@@ -118,15 +130,25 @@ export class FirstPersonController {
         // Apply vertical
         this.player.position.y += displacement.y;
 
-        // Ground collision
-        const { grounded, groundY } = this.collision.checkGround(this.player.position);
-        if (grounded && this.player.position.y <= groundY + PLAYER_HEIGHT) {
-            this.player.position.y = groundY + PLAYER_HEIGHT;
-            this.movement.land(groundY);
-        } else if (!grounded && this.player.position.y <= PLAYER_HEIGHT) {
-            // Fallback to world floor
-            this.player.position.y = PLAYER_HEIGHT;
-            this.movement.land(0);
+        // Ground collision — prefer heightmap, fallback to raycaster
+        if (this._getHeightAt) {
+            const groundY = this._getHeightAt(
+                this.player.position.x,
+                this.player.position.z,
+            );
+            if (this.player.position.y <= groundY + PLAYER_HEIGHT) {
+                this.player.position.y = groundY + PLAYER_HEIGHT;
+                this.movement.land(groundY);
+            }
+        } else {
+            const { grounded, groundY } = this.collision.checkGround(this.player.position);
+            if (grounded && this.player.position.y <= groundY + PLAYER_HEIGHT) {
+                this.player.position.y = groundY + PLAYER_HEIGHT;
+                this.movement.land(groundY);
+            } else if (!grounded && this.player.position.y <= PLAYER_HEIGHT) {
+                this.player.position.y = PLAYER_HEIGHT;
+                this.movement.land(0);
+            }
         }
     }
 

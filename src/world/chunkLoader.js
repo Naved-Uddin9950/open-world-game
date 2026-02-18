@@ -1,77 +1,53 @@
 // ============================================================
-// chunkLoader.js — Chunk mesh creation with pool recycling
+// chunkLoader.js — Terrain chunk orchestrator with LOD
 // ============================================================
-import * as THREE from 'three';
-import { CHUNK_SIZE } from '../utils/constants.js';
+import { TerrainGenerator } from './terrain/terrainGenerator.js';
+import { TerrainChunk } from './terrain/terrainChunk.js';
+import { BiomeSystem } from './terrain/biomeSystem.js';
 
 export class ChunkLoader {
-    constructor() {
-        /** Pool of recycled chunk meshes. */
-        this._pool = [];
-
-        // Shared geometry + material for all ground chunks (saves memory)
-        this._sharedGeometry = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 1, 1);
-        this._sharedGeometry.rotateX(-Math.PI / 2); // lay flat
-
-        this._sharedMaterial = new THREE.MeshStandardMaterial({
-            color: 0x2d5a1b,
-            roughness: 0.95,
-            metalness: 0.0,
-        });
+    /**
+     * @param {number} [seed=42]
+     */
+    constructor(seed = 42) {
+        this.generator = new TerrainGenerator(seed);
+        this.biome = new BiomeSystem();
+        this._builder = new TerrainChunk(this.generator, this.biome);
     }
 
     /**
-     * Create (or recycle) a chunk mesh.
-     * @param {number} cx  Chunk X coordinate (grid space)
-     * @param {number} cz  Chunk Z coordinate (grid space)
-     * @returns {THREE.Mesh}
+     * Create a terrain LOD mesh for the given chunk coordinates.
+     * @param {number} cx  Chunk X (grid space)
+     * @param {number} cz  Chunk Z (grid space)
+     * @returns {THREE.LOD}
      */
     createChunk(cx, cz) {
-        let mesh;
-
-        if (this._pool.length > 0) {
-            mesh = this._pool.pop();
-        } else {
-            mesh = new THREE.Mesh(this._sharedGeometry, this._sharedMaterial);
-            mesh.receiveShadow = true;
-            mesh.castShadow = false;
-        }
-
-        // Position in world space (chunk center)
-        mesh.position.set(
-            cx * CHUNK_SIZE + CHUNK_SIZE / 2,
-            0,
-            cz * CHUNK_SIZE + CHUNK_SIZE / 2,
-        );
-
-        mesh.name = `chunk_${cx}_${cz}`;
-        mesh.visible = true;
-
-        return mesh;
+        return this._builder.createLOD(cx, cz);
     }
 
     /**
-     * Return a chunk mesh to the pool for reuse.
-     * @param {THREE.Mesh} mesh
+     * Recycle a chunk (just hide it — geometry is unique per chunk).
+     * @param {THREE.LOD} lod
      */
-    recycleChunk(mesh) {
-        mesh.visible = false;
-        this._pool.push(mesh);
+    recycleChunk(lod) {
+        lod.visible = false;
+        this._builder.disposeLOD(lod);
     }
 
     /**
-     * Fully dispose a chunk mesh (when shutting down).
-     * @param {THREE.Mesh} mesh
+     * Dispose a chunk's geometry.
+     * @param {THREE.LOD} lod
      */
-    disposeChunk(mesh) {
-        // Geometry and material are shared — don't dispose them per-chunk
-        mesh.visible = false;
+    disposeChunk(lod) {
+        this._builder.disposeLOD(lod);
     }
 
-    /** Dispose shared resources (call on engine shutdown). */
+    /** Expose terrain generator for height queries. */
+    getHeightAt(worldX, worldZ) {
+        return this.generator.getHeightAt(worldX, worldZ);
+    }
+
     dispose() {
-        this._sharedGeometry.dispose();
-        this._sharedMaterial.dispose();
-        this._pool.length = 0;
+        // Nothing shared to dispose — all geometry is per-chunk
     }
 }

@@ -45,3 +45,31 @@ export const QUALITY_TIERS = {
 export const FOG_NEAR = 80;
 export const FOG_FAR = 350;
 export const FOG_COLOR = 0xc8d6e5;
+
+// ── Terrain Generation ─────────────────────────────────────
+export const TERRAIN_HEIGHT_SCALE = 78;         // total max height
+export const TERRAIN_CONTINENTAL_SCALE = 0.002;  // broad mountains
+export const TERRAIN_CONTINENTAL_HEIGHT = 60;
+export const TERRAIN_DETAIL_SCALE = 0.01;        // hills / ridges
+export const TERRAIN_DETAIL_HEIGHT = 15;
+export const TERRAIN_MICRO_SCALE = 0.05;         // small bumps
+export const TERRAIN_MICRO_HEIGHT = 3;
+export const TERRAIN_POWER_CURVE = 1.6;          // push valleys flat, peaks sharp
+
+// ── Terrain LOD segments ───────────────────────────────────
+export const TERRAIN_SEG_HIGH = 64;
+export const TERRAIN_SEG_MED = 16;
+export const TERRAIN_SEG_LOW = 4;
+
+// ── Biome colours (hex) ────────────────────────────────────
+export const BIOME_DEEP_GRASS = 0x2d5a1b;
+export const BIOME_LIGHT_GRASS = 0x5a8c3a;
+export const BIOME_DIRT = 0x8b7355;
+export const BIOME_ROCK = 0x7a7a7a;
+export const BIOME_SNOW = 0xe8e8f0;
+
+// ── Biome elevation thresholds (normalised 0-1) ────────────
+export const BIOME_GRASS_MAX = 0.18;
+export const BIOME_DIRT_MAX = 0.38;
+export const BIOME_ROCK_MAX = 0.7;
+export const BIOME_SLOPE_ROCK_THRESHOLD = 0.4;

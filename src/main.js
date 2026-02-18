@@ -60,11 +60,15 @@ class Engine {
         // Show FPS overlay
         this.perfMonitor.showHUD(true);
 
+        // ── Terrain height provider ─────────────────────────
+        this.player.setHeightProvider((x, z) => this.worldManager.getHeightAt(x, z));
+
         // ── Initial world load ──────────────────────────────
         this.worldManager.update(this.player.getPosition());
 
-        // Register ground chunks as colliders
-        this._syncColliders();
+        // Spawn player at terrain height
+        const spawnY = this.worldManager.getHeightAt(0, 0);
+        this.player.player.position.y = spawnY + 1.7; // PLAYER_HEIGHT
 
         // ── Game loop ───────────────────────────────────────
         this.loop = new GameLoop({
@@ -87,9 +91,6 @@ class Engine {
         // World chunks
         this.worldManager.update(this.player.getPosition());
 
-        // Re-sync colliders when chunks change
-        this._syncColliders();
-
         // Lighting follows time + player
         this.lightingSystem.update(this.timeSystem, this.player.getPosition());
 
@@ -97,20 +98,17 @@ class Engine {
         this.skySystem.update(this.timeSystem);
         this.skySystem.followCamera(this.player.getPosition());
 
-        // LOD
+        // LOD — update engine LOD objects + terrain LOD chunks
         this.lodSystem.update(this.gameCamera.raw);
+        for (const lod of this.worldManager.getActiveChunkMeshes()) {
+            lod.update(this.gameCamera.raw);
+        }
     }
 
     /** Render frame. */
     _render() {
         this.renderer.render(this.gameScene.raw, this.gameCamera.raw);
         this.perfMonitor.update(this.renderer.info);
-    }
-
-    /** Keep collision system in sync with active chunk meshes. */
-    _syncColliders() {
-        const meshes = this.worldManager.getActiveChunkMeshes();
-        this.player.collision.colliders = meshes;
     }
 }
 
