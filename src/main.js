@@ -21,6 +21,7 @@ import { DayNightCycle } from './systems/dayNightCycle.js';
 import { LODSystem } from './systems/lodSystem.js';
 import { PerformanceMonitor } from './systems/performanceMonitor.js';
 import { AutoQualitySystem } from './systems/autoQualitySystem.js';
+import { AnimalAIController } from './ai/animalAIController.js';
 
 // ═══════════════════════════════════════════════════════════
 // Engine initialisation
@@ -74,6 +75,9 @@ class Engine {
             onRender: () => this._render(),
         });
 
+        // ── AI controller ───────────────────────────────────
+        this.animalAI = new AnimalAIController(this.gameScene.raw, this.worldManager, { dayProvider: () => this.dayNightCycle.isDay() });
+
         this.loop.start();
     }
 
@@ -89,6 +93,9 @@ class Engine {
 
         // World chunks
         this.worldManager.update(this.player.getPosition());
+
+        // Animals AI update
+        if (this.animalAI) this.animalAI.update(dt);
 
         // Day/Night cycle (time, sun, moon, sky, fog)
         this.dayNightCycle.update(this.player.getPosition());

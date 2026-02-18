@@ -124,10 +124,33 @@ export const ANIMAL_MEAN_COUNTS = {
   wolf: 1, // low
 };
 export const ANIMAL_SIZE = {
-  cow: 0.004,
+  cow: 0.002,
   chicken: 0.004,
-  deer: 0.3,
-  wolf: 0.1,
+  deer: 0.2,
+  wolf: 0.01,
 };
 export const ANIMAL_MAX_PER_CHUNK = 24;
 export const ANIMAL_SPACING = 6; // sampling spacing for placement jitter
+// ── AI / Animal behavior constants ─────────────────────────────────
+export const WOLF_DETECTION_RADIUS = 40; // how far wolves can detect targets
+export const WOLF_ATTACK_RANGE = 2.0; // melee range for wolves
+export const WOLF_CHASE_SPEED_MULT = 1.2; // wolf speed multiplier while chasing
+export const WOLF_BASE_SPEED = 3.5; // meters/sec base wolf speed
+
+export const CHICKEN_FEAR_RADIUS = 15; // chickens flee from player within this
+export const CHICKEN_PANIC_SPEED = 4.0; // panic run speed
+export const CHICKEN_WANDER_SPEED = 1.2;
+
+export const DEER_FEAR_RADIUS = 30; // deer flee from player/wolf within this
+export const DEER_PANIC_SPEED = 5.0;
+export const DEER_NORMAL_SPEED = 3.0;
+export const DEER_GROUP_RADIUS = 10;
+
+export const COW_WOLF_FEAR_RADIUS = 25; // cows flee from wolves within this
+export const COW_NORMAL_SPEED = 1.2;
+export const COW_REACTION_DELAY = 1.2; // seconds delay before cow reacts
+export const COW_GROUP_RADIUS = 12;
+
+// Misc AI tuning
+export const ANIMAL_DAY_ACTIVITY = { day: 1.0, night: 0.6 };
+
