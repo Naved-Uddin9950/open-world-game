@@ -28,7 +28,7 @@ import { AutoQualitySystem } from './systems/autoQualitySystem.js';
 
 class Engine {
     constructor() {
-        console.log('[Engine] Initialising…');
+        // Engine initialising
 
         // ── Canvas ──────────────────────────────────────────
         this.canvas = document.getElementById('game-canvas');
@@ -74,7 +74,6 @@ class Engine {
             onRender: () => this._render(),
         });
 
-        console.log('[Engine] Ready — click to play');
         this.loop.start();
     }
 

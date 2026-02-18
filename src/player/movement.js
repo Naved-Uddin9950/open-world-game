@@ -60,10 +60,7 @@ export class Movement {
         this.velocity.x = move.x * moveSpeed;
         this.velocity.z = move.z * moveSpeed;
 
-        // Debug: log vectors when moving so we can verify directions in-game
-        if (typeof window !== 'undefined' && window.DEBUG_MOVEMENT) {
-            console.debug('[movement] forward=', forward.clone(), 'right=', right.clone(), 'move=', move.clone(), 'vel=', new THREE.Vector3(this.velocity.x, 0, this.velocity.z));
-        }
+        // (debug logs removed)
 
         // ── Vertical / gravity ──────────────────────────────
         if (this.jump && this.isGrounded && this.canJump) {

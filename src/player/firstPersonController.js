@@ -66,7 +66,6 @@ export class FirstPersonController {
 
     _onPointerLockChange() {
         this._isLocked = document.pointerLockElement === this.domElement;
-        console.info('[FirstPersonController] pointer lock', this._isLocked ? 'locked' : 'unlocked');
     }
 
     /** Mouse look. */
