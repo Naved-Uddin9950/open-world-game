@@ -163,23 +163,46 @@ export class FirstPersonController {
         this.player.position.y += displacement.y;
 
         // Ground collision — prefer heightmap, fallback to raycaster
+        // Allow stepping down small drops immediately, but for larger drops
+        // let the player fall (gravity) so movement feels natural.
+        const MAX_STEP_DOWN = 1.0; // meters — max drop height that will be snapped
         if (this._getHeightAt) {
             const groundY = this._getHeightAt(
                 this.player.position.x,
                 this.player.position.z,
             );
-            if (this.player.position.y <= groundY + PLAYER_HEIGHT) {
-                this.player.position.y = groundY + PLAYER_HEIGHT;
+            const targetY = groundY + PLAYER_HEIGHT;
+            const drop = this.player.position.y - targetY;
+
+            if (drop <= 0) {
+                // Player is at or below the target — snap up and land
+                this.player.position.y = targetY;
                 this.movement.land(groundY);
+            } else if (drop <= MAX_STEP_DOWN) {
+                // Small step down: snap to ground and land
+                this.player.position.y = targetY;
+                this.movement.land(groundY);
+            } else {
+                // Large drop: allow falling
+                this.movement.isGrounded = false;
             }
         } else {
             const { grounded, groundY } = this.collision.checkGround(this.player.position);
-            if (grounded && this.player.position.y <= groundY + PLAYER_HEIGHT) {
-                this.player.position.y = groundY + PLAYER_HEIGHT;
-                this.movement.land(groundY);
-            } else if (!grounded && this.player.position.y <= PLAYER_HEIGHT) {
+            if (grounded) {
+                const targetY = groundY + PLAYER_HEIGHT;
+                const drop = this.player.position.y - targetY;
+
+                if (drop <= MAX_STEP_DOWN) {
+                    this.player.position.y = targetY;
+                    this.movement.land(groundY);
+                } else {
+                    this.movement.isGrounded = false;
+                }
+            } else if (this.player.position.y <= PLAYER_HEIGHT) {
                 this.player.position.y = PLAYER_HEIGHT;
                 this.movement.land(0);
+            } else {
+                this.movement.isGrounded = false;
             }
         }
     }
