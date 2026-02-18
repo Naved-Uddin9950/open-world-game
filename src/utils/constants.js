@@ -115,4 +115,14 @@ export const ROCK_BOULDER_SCALE = [8.0, 12.5];
 export const ROCK_PEBBLE_SCALE = [2.5, 5.5];
 export const ROCK_COLOR = 0x6b6b6b;
 export const ROCK_COLOR_DARK = 0x4a4a4a;
+// ── Animals ──────────────────────────────────────────────────
+// Mean expected animals per chunk (used as a deterministic seed-driven mean)
+export const ANIMAL_MEAN_COUNTS = {
+    chicken: 8, // medium-high
+    cow: 3,     // medium
+    deer: 2,    // low-medium
+    wolf: 1,    // low
+};
+export const ANIMAL_MAX_PER_CHUNK = 24;
+export const ANIMAL_SPACING = 6; // sampling spacing for placement jitter
 

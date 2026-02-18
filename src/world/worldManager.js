@@ -5,12 +5,14 @@ import * as THREE from 'three';
 import { CHUNK_SIZE } from '../utils/constants.js';
 import { ChunkLoader } from './chunkLoader.js';
 import { ForestManager } from './vegetation/forestManager.js';
+import { AnimalManager } from './animals/animalManager.js';
 
 export class WorldManager {
     constructor(scene, player = null, seed = 42) {
         this.scene = scene;
         this.chunkLoader = new ChunkLoader(seed);
         this.forest = new ForestManager(scene, this.chunkLoader.generator, seed);
+        this.animals = new AnimalManager(scene, this.chunkLoader.generator, seed);
         this._player = player; // FirstPersonController instance (optional)
         this.activeChunks = new Map();
         this._lastChunkX = null;
@@ -72,6 +74,8 @@ export class WorldManager {
         this.activeChunks.set(key, lod);
         // Load vegetation for this chunk and register any colliders with the player
         const veg = this.forest.loadChunkVegetation(cx, cz);
+        // Load animals for this chunk
+        const animals = this.animals.loadChunkAnimals(cx, cz);
         if (veg && this._player && typeof this._player.addColliders === 'function') {
             const colliders = [];
             if (veg.trees && veg.trees.userData && veg.trees.userData.colliders) colliders.push(...veg.trees.userData.colliders);
@@ -92,6 +96,8 @@ export class WorldManager {
         const [cx, cz] = key.split(',').map(Number);
         // Unload vegetation and unregister colliders from player
         const veg = this.forest.unloadChunkVegetation(cx, cz);
+        // Unload animals
+        const animals = this.animals.unloadChunkAnimals(cx, cz);
         if (veg && this._player && typeof this._player.removeColliders === 'function') {
             const colliders = [];
             if (veg.trees && veg.trees.userData && veg.trees.userData.colliders) colliders.push(...veg.trees.userData.colliders);
@@ -115,5 +121,6 @@ export class WorldManager {
         }
         this.activeChunks.clear();
         this.forest.dispose();
+        this.animals.dispose();
     }
 }
