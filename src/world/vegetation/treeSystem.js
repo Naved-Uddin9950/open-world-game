@@ -25,10 +25,12 @@ canopyGeoHigh.translate(0, 3.2, 0);
 // Merge into single geometry for 1 draw call per LOD
 const highGeo = _mergeSimple(trunkGeoHigh, canopyGeoHigh);
 
-// Medium detail: 5-sided trunk + cone canopy
+// Medium detail: 5-sided trunk + low-detail icosahedron canopy
 const trunkGeoMed = new THREE.CylinderGeometry(0.15, 0.25, 2.0, 5);
 trunkGeoMed.translate(0, 1.0, 0);
-const canopyGeoMed = new THREE.ConeGeometry(1.4, 2.8, 5);
+// Use an icosahedron for the medium LOD canopy so the silhouette remains
+// round when switching between med and high LODs (avoids cone->sphere pop).
+const canopyGeoMed = new THREE.IcosahedronGeometry(1.4, 0);
 canopyGeoMed.translate(0, 3.4, 0);
 
 const medGeo = _mergeSimple(trunkGeoMed, canopyGeoMed);
@@ -49,6 +51,10 @@ const treeMaterialMed = treeMaterialHigh.clone();
  * Merge two BufferGeometries with vertex colours — trunk brown, canopy green.
  */
 function _mergeSimple(trunkGeo, canopyGeo) {
+    // Normalize to non-indexed geometries so we can concatenate attributes
+    trunkGeo = trunkGeo.toNonIndexed();
+    canopyGeo = canopyGeo.toNonIndexed();
+
     const trunkCount = trunkGeo.attributes.position.count;
     const canopyCount = canopyGeo.attributes.position.count;
 
@@ -86,18 +92,12 @@ function _mergeSimple(trunkGeo, canopyGeo) {
     mergedCol.set(trunkColors);
     mergedCol.set(canopyColors, trunkCount * 3);
 
-    // Merge indices
-    const trunkIdx = trunkGeo.index ? Array.from(trunkGeo.index.array) : [];
-    const canopyIdx = canopyGeo.index
-        ? Array.from(canopyGeo.index.array).map(i => i + trunkCount)
-        : [];
-    const mergedIdx = new Uint16Array([...trunkIdx, ...canopyIdx]);
-
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(mergedPos, 3));
     geo.setAttribute('normal', new THREE.BufferAttribute(mergedNorm, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(mergedCol, 3));
-    geo.setIndex(new THREE.BufferAttribute(mergedIdx, 1));
+    // Keep geometry non-indexed (attributes already concatenated). This
+    // avoids problems when source geometries mix indexed and non-indexed forms.
 
     return geo;
 }
@@ -224,25 +224,57 @@ export class TreeSystem {
         // Support two LOD children: high and med
         if (children.length < 2) return;
 
-        // Compute nearest horizontal distance from camera to any placement in this group.
-        const placements = treeGroup.userData.placements;
-        let dist = Infinity;
-        if (placements && placements.length) {
-            for (let i = 0; i < placements.length; i++) {
-                const p = placements[i];
-                const dx = cameraPos.x - p.x;
-                const dz = cameraPos.z - p.z;
-                const d = Math.sqrt(dx * dx + dz * dz);
-                if (d < dist) dist = d;
+        const highMesh = children[0];
+        const medMesh = children[1];
+
+        // Per-instance LOD: compute distance per placement and assign its matrix
+        // to the appropriate InstancedMesh. This avoids switching the entire
+        // chunk to high detail when only one tree is near.
+        const placements = treeGroup.userData.placements || [];
+
+        // Prepare a zero matrix to hide instances on the other mesh
+        _dummy.position.set(0, -9999, 0);
+        _dummy.scale.setScalar(0.000001);
+        _dummy.updateMatrix();
+        const hideMatrix = _dummy.matrix.clone();
+
+        for (let i = 0; i < placements.length; i++) {
+            const p = placements[i];
+            const dx = cameraPos.x - p.x;
+            const dz = cameraPos.z - p.z;
+            const d = Math.sqrt(dx * dx + dz * dz);
+
+            // Recompute instance matrix (same logic as creation)
+            _dummy.position.set(p.x, p.y, p.z);
+            _dummy.rotation.set(0, p.rotation || 0, 0);
+
+            let instanceScale = p.scale || 1;
+            if (p.desiredHeight !== undefined) {
+                // Use highGeo model height to compute scale — fallbacks kept simple
+                const highModelHeight = highMesh.geometry.boundingBox ? (highMesh.geometry.boundingBox.max.y - highMesh.geometry.boundingBox.min.y) : 4.8;
+                instanceScale = p.desiredHeight / highModelHeight;
             }
-        } else {
-            // Fallback: use chunk centre distance stored on medMesh userData if present
-            dist = cameraPos.distanceTo(treeGroup.position || new THREE.Vector3());
+            instanceScale = Math.max(instanceScale, TREE_MIN_SCALE);
+            instanceScale = Math.min(instanceScale, TREE_MAX_SCALE * 10);
+
+            _dummy.scale.setScalar(instanceScale);
+            _dummy.updateMatrix();
+
+            if (d < TREE_LOD_HIGH_DIST) {
+                highMesh.setMatrixAt(i, _dummy.matrix);
+                medMesh.setMatrixAt(i, hideMatrix);
+            } else if (d < TREE_LOD_MED_DIST) {
+                medMesh.setMatrixAt(i, _dummy.matrix);
+                highMesh.setMatrixAt(i, hideMatrix);
+            } else {
+                // Out of render LOD range — hide both
+                medMesh.setMatrixAt(i, hideMatrix);
+                highMesh.setMatrixAt(i, hideMatrix);
+            }
         }
 
-        // High / Med
-        children[0].visible = dist < TREE_LOD_HIGH_DIST;
-        children[1].visible = dist >= TREE_LOD_HIGH_DIST && dist < TREE_LOD_MED_DIST;
+        highMesh.instanceMatrix.needsUpdate = true;
+        medMesh.instanceMatrix.needsUpdate = true;
     }
 
     /**
