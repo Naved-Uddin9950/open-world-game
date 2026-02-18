@@ -111,8 +111,8 @@ export const ROCK_DENSITY_DIRT = 0.08;
 export const ROCK_DENSITY_ROCK = 0.15;
 export const ROCK_SPACING = 10;
 export const ROCK_MAX_PER_CHUNK = 25;
-export const ROCK_BOULDER_SCALE = [1.2, 2.5];
-export const ROCK_PEBBLE_SCALE = [0.2, 0.6];
+export const ROCK_BOULDER_SCALE = [8.0, 12.5];
+export const ROCK_PEBBLE_SCALE = [2.5, 5.5];
 export const ROCK_COLOR = 0x6b6b6b;
 export const ROCK_COLOR_DARK = 0x4a4a4a;
 

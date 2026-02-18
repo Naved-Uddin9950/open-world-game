@@ -34,8 +34,6 @@ canopyGeoMed.translate(0, 3.4, 0);
 const medGeo = _mergeSimple(trunkGeoMed, canopyGeoMed);
 
 // Billboard: vertical plane
-const billGeo = new THREE.PlaneGeometry(3.0, 5.0);
-billGeo.translate(0, 2.5, 0);
 
 // ── Shared materials ────────────────────────────────────────
 const treeMaterialHigh = new THREE.MeshStandardMaterial({
@@ -45,12 +43,7 @@ const treeMaterialHigh = new THREE.MeshStandardMaterial({
 });
 const treeMaterialMed = treeMaterialHigh.clone();
 // Billboard material is hidden by default to avoid large flat 'aura' planes
-const billMaterial = new THREE.MeshBasicMaterial({
-    color: 0x2d6b1b,
-    side: THREE.DoubleSide,
-    transparent: true,
-    opacity: 0.0,
-});
+// billboard geometry/material removed — we use only high/med instanced meshes
 
 /**
  * Merge two BufferGeometries with vertex colours — trunk brown, canopy green.
