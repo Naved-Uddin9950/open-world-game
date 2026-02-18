@@ -46,6 +46,9 @@ export class AnimalManager {
         const group = new THREE.Group();
         group.name = `animals:${key}`;
 
+        // Colliders for this animal group (one per animal) — registered by WorldManager
+        const colliders = [];
+
         for (const p of placements) {
             let mesh = null;
             const model = this._models[p.type];
@@ -64,11 +67,58 @@ export class AnimalManager {
             mesh.rotation.y = p.rotation;
             mesh.userData = { type: p.type };
             group.add(mesh);
+
+            // Create a simple invisible collider approximating the mesh bounds.
+            // Use a unit box scaled to the mesh bounding box size so it covers
+            // either placeholder geometry or cloned GLTF models.
+            try {
+                const bbox = new THREE.Box3().setFromObject(mesh);
+                const size = new THREE.Vector3();
+                bbox.getSize(size);
+                // Ensure we have a non-zero size
+                if (size.x === 0 && size.y === 0 && size.z === 0) {
+                    size.set(1 * finalScale, 1 * finalScale, 1 * finalScale);
+                }
+
+                const colGeo = new THREE.BoxGeometry(1, 1, 1);
+                const colMat = new THREE.MeshBasicMaterial({ visible: false });
+                const col = new THREE.Mesh(colGeo, colMat);
+                col.name = 'animalCollider';
+                col.position.set(mesh.position.x, mesh.position.y + (size.y / 2) || mesh.position.y, mesh.position.z);
+                col.scale.set(size.x, size.y || size.x, size.z || size.x);
+                col.matrixAutoUpdate = true;
+                colliders.push(col);
+                group.add(col);
+            } catch (e) {
+                // If bounding box computation fails, skip collider for this animal
+            }
         }
+
+        // Attach colliders list to the group so WorldManager can register them
+        group.userData.colliders = colliders;
 
         this.scene.add(group);
         this._chunkAnimals.set(key, group);
         return group;
+    }
+
+    /**
+     * Register environment colliders (trees/rocks/etc) so animals can use them
+     * for their own movement/collision logic if needed.
+     * @param  {...THREE.Object3D} objects
+     */
+    addEnvironmentColliders(...objects) {
+        this._envColliders = this._envColliders || [];
+        this._envColliders.push(...objects);
+    }
+
+    /**
+     * Unregister previously added environment colliders.
+     * @param  {...THREE.Object3D} objects
+     */
+    removeEnvironmentColliders(...objects) {
+        if (!this._envColliders) return;
+        this._envColliders = this._envColliders.filter(o => !objects.includes(o));
     }
 
     async _preloadModels(types) {

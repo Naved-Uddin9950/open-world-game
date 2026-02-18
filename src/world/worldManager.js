@@ -96,23 +96,35 @@ export class WorldManager {
     const veg = this.forest.loadChunkVegetation(cx, cz);
     // Load animals for this chunk
     const animals = this.animals.loadChunkAnimals(cx, cz);
-    if (
-      veg &&
-      this._player &&
-      typeof this._player.addColliders === "function"
-    ) {
+    if (veg || animals) {
       const colliders = [];
-      if (veg.trees && veg.trees.userData && veg.trees.userData.colliders)
+      if (veg && veg.trees && veg.trees.userData && veg.trees.userData.colliders)
         colliders.push(...veg.trees.userData.colliders);
-      if (veg.rocks && veg.rocks.userData && veg.rocks.userData.colliders)
+      if (veg && veg.rocks && veg.rocks.userData && veg.rocks.userData.colliders)
         colliders.push(...veg.rocks.userData.colliders);
+      if (animals && animals.userData && animals.userData.colliders)
+        colliders.push(...animals.userData.colliders);
+
       // Ensure collider world matrices are computed now so collision checks
       // performed before a render have valid world transforms.
       for (const c of colliders) {
-        if (c && typeof c.updateMatrixWorld === "function")
-          c.updateMatrixWorld(true);
+        if (c && typeof c.updateMatrixWorld === "function") c.updateMatrixWorld(true);
       }
-      if (colliders.length > 0) this._player.addColliders(...colliders);
+
+      if (this._player && typeof this._player.addColliders === "function") {
+        if (colliders.length > 0) this._player.addColliders(...colliders);
+      }
+
+      // Also register environment (veg) colliders with animals so they can
+      // consider trees/rocks when moving. AnimalManager exposes helpers.
+      if (animals && this.animals && typeof this.animals.addEnvironmentColliders === 'function') {
+        const env = [];
+        if (veg && veg.trees && veg.trees.userData && veg.trees.userData.colliders)
+          env.push(...veg.trees.userData.colliders);
+        if (veg && veg.rocks && veg.rocks.userData && veg.rocks.userData.colliders)
+          env.push(...veg.rocks.userData.colliders);
+        if (env.length > 0) this.animals.addEnvironmentColliders(...env);
+      }
     }
   }
 
@@ -125,17 +137,28 @@ export class WorldManager {
     const veg = this.forest.unloadChunkVegetation(cx, cz);
     // Unload animals
     const animals = this.animals.unloadChunkAnimals(cx, cz);
-    if (
-      veg &&
-      this._player &&
-      typeof this._player.removeColliders === "function"
-    ) {
+    if (veg || animals) {
       const colliders = [];
-      if (veg.trees && veg.trees.userData && veg.trees.userData.colliders)
+      if (veg && veg.trees && veg.trees.userData && veg.trees.userData.colliders)
         colliders.push(...veg.trees.userData.colliders);
-      if (veg.rocks && veg.rocks.userData && veg.rocks.userData.colliders)
+      if (veg && veg.rocks && veg.rocks.userData && veg.rocks.userData.colliders)
         colliders.push(...veg.rocks.userData.colliders);
-      if (colliders.length > 0) this._player.removeColliders(...colliders);
+      if (animals && animals.userData && animals.userData.colliders)
+        colliders.push(...animals.userData.colliders);
+
+      if (this._player && typeof this._player.removeColliders === "function") {
+        if (colliders.length > 0) this._player.removeColliders(...colliders);
+      }
+
+      // Unregister environment colliders from animals
+      if (animals && this.animals && typeof this.animals.removeEnvironmentColliders === 'function') {
+        const env = [];
+        if (veg && veg.trees && veg.trees.userData && veg.trees.userData.colliders)
+          env.push(...veg.trees.userData.colliders);
+        if (veg && veg.rocks && veg.rocks.userData && veg.rocks.userData.colliders)
+          env.push(...veg.rocks.userData.colliders);
+        if (env.length > 0) this.animals.removeEnvironmentColliders(...env);
+      }
     }
   }
 
