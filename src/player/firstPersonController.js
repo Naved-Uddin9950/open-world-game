@@ -66,6 +66,7 @@ export class FirstPersonController {
 
     _onPointerLockChange() {
         this._isLocked = document.pointerLockElement === this.domElement;
+        console.info('[FirstPersonController] pointer lock', this._isLocked ? 'locked' : 'unlocked');
     }
 
     /** Mouse look. */
@@ -117,11 +118,11 @@ export class FirstPersonController {
     update(dt) {
         if (!this._isLocked) return;
 
-        // Get camera euler for movement direction
+        // Ensure internal euler matches camera for look (movement uses camera directly)
         this._euler.setFromQuaternion(this.camera.quaternion);
 
-        // Compute displacement
-        const displacement = this.movement.update(dt, this._euler);
+        // Compute displacement (movement now uses camera world vectors)
+        const displacement = this.movement.update(dt, this.camera);
 
         // Apply horizontal
         this.player.position.x += displacement.x;

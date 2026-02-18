@@ -29,31 +29,41 @@ export class Movement {
 
     /**
      * Compute velocity for this tick.
+     * Uses the camera's world forward/right vectors so movement follows camera orientation
+     * projected onto the horizontal plane.
      * @param {number} dt  Fixed timestep in seconds
-     * @param {THREE.Euler} cameraRotation  Current camera euler
+     * @param {THREE.Camera} camera  Camera to derive forward/right vectors from
      * @returns {THREE.Vector3}  World-space displacement
      */
-    update(dt, cameraRotation) {
+    update(dt, camera) {
         // ── Horizontal movement ─────────────────────────────
-        this.direction.set(0, 0, 0);
         const moveSpeed = this.speed * (this.isSprinting ? this.sprintMultiplier : 1);
 
-        if (this.forward) this.direction.z -= 1;
-        if (this.backward) this.direction.z += 1;
-        if (this.left) this.direction.x -= 1;
-        if (this.right) this.direction.x += 1;
+        // Build camera-based basis (forward, right) projected to XZ plane
+        const forward = new THREE.Vector3();
+        camera.getWorldDirection(forward); // points where camera looks (may have Y)
+        forward.y = 0;
+        forward.normalize();
 
-        this.direction.normalize();
+        const right = new THREE.Vector3();
+        right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
 
-        // Rotate direction by camera yaw only
-        const yaw = cameraRotation.y;
-        const sin = Math.sin(yaw);
-        const cos = Math.cos(yaw);
-        const dx = this.direction.x * cos - this.direction.z * sin;
-        const dz = this.direction.x * sin + this.direction.z * cos;
+        // Compose movement in world-space using input flags
+        const move = new THREE.Vector3();
+        if (this.forward) move.addScaledVector(forward, 1);
+        if (this.backward) move.addScaledVector(forward, -1);
+        if (this.right) move.addScaledVector(right, 1);
+        if (this.left) move.addScaledVector(right, -1);
 
-        this.velocity.x = dx * moveSpeed;
-        this.velocity.z = dz * moveSpeed;
+        if (move.lengthSq() > 0) move.normalize();
+
+        this.velocity.x = move.x * moveSpeed;
+        this.velocity.z = move.z * moveSpeed;
+
+        // Debug: log vectors when moving so we can verify directions in-game
+        if (typeof window !== 'undefined' && window.DEBUG_MOVEMENT) {
+            console.debug('[movement] forward=', forward.clone(), 'right=', right.clone(), 'move=', move.clone(), 'vel=', new THREE.Vector3(this.velocity.x, 0, this.velocity.z));
+        }
 
         // ── Vertical / gravity ──────────────────────────────
         if (this.jump && this.isGrounded && this.canJump) {
