@@ -8,11 +8,17 @@ import { ForestManager } from './vegetation/forestManager.js';
 import { AnimalManager } from './animals/animalManager.js';
 
 export class WorldManager {
-    constructor(scene, player = null, seed = 42) {
+    /**
+     * @param {THREE.Scene} scene
+     * @param {FirstPersonController|null} player
+     * @param {AssetLoader|null} assetLoader
+     * @param {number} [seed=42]
+     */
+    constructor(scene, player = null, assetLoader = null, seed = 42) {
         this.scene = scene;
         this.chunkLoader = new ChunkLoader(seed);
         this.forest = new ForestManager(scene, this.chunkLoader.generator, seed);
-        this.animals = new AnimalManager(scene, this.chunkLoader.generator, seed);
+        this.animals = new AnimalManager(scene, this.chunkLoader.generator, assetLoader, seed);
         this._player = player; // FirstPersonController instance (optional)
         this.activeChunks = new Map();
         this._lastChunkX = null;

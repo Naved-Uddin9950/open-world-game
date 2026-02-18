@@ -11,11 +11,24 @@ import {
 } from '../../utils/constants.js';
 
 export class AnimalManager {
-    constructor(scene, terrainGen, seed = 42) {
+    /**
+     * @param {THREE.Scene} scene
+     * @param {TerrainGenerator} terrainGen
+     * @param {AssetLoader|null} assetLoader
+     * @param {number} [seed=42]
+     */
+    constructor(scene, terrainGen, assetLoader = null, seed = 42) {
         this.scene = scene;
         this._terrain = terrainGen;
         this._noise = new SimplexNoise(seed * 2.71828);
         this._chunkAnimals = new Map();
+        this._assetLoader = assetLoader;
+        this._models = {}; // loaded GLTF scenes by type
+
+        // Attempt to preload models if an asset loader is available
+        if (this._assetLoader) {
+            this._preloadModels(['cow', 'deer', 'wolf', 'chicken']);
+        }
     }
 
     loadChunkAnimals(cx, cz) {
@@ -32,7 +45,17 @@ export class AnimalManager {
         group.name = `animals:${key}`;
 
         for (const p of placements) {
-            const mesh = this._createAnimalMesh(p.type, p.scale);
+            let mesh = null;
+            const model = this._models[p.type];
+            if (model) {
+                try {
+                    // deep clone (may include nested meshes)
+                    mesh = model.clone(true);
+                } catch (e) {
+                    mesh = null;
+                }
+            }
+            if (!mesh) mesh = this._createAnimalMesh(p.type, p.scale);
             mesh.position.set(p.x, p.y + 0.05, p.z);
             mesh.rotation.y = p.rotation;
             mesh.userData = { type: p.type };
@@ -42,6 +65,41 @@ export class AnimalManager {
         this.scene.add(group);
         this._chunkAnimals.set(key, group);
         return group;
+    }
+
+    async _preloadModels(types) {
+        for (const t of types) {
+            const candidates = [
+                `assets/models/${t}.glb`,
+                `assets/models/${t}/${t}.glb`,
+                `assets/models/${t}/source/${t}.glb`,
+                `assets/models/${t}/source/GLB_${t.charAt(0).toUpperCase() + t.slice(1)}.glb`,
+                `assets/models/${t}/source/GLB_${t.toUpperCase()}.glb`,
+                `assets/models/${t}/model.glb`,
+                `assets/models/${t}/source/model.glb`,
+            ];
+
+            let loaded = null;
+            for (const url of candidates) {
+                try {
+                    const res = await this._assetLoader.loadModel(url);
+                    if (res) {
+                        loaded = res;
+                        console.debug(`[AnimalManager] Loaded model for ${t} from ${url}`);
+                        break;
+                    }
+                } catch (e) {
+                    // try next candidate
+                }
+            }
+
+            if (loaded) {
+                if (loaded.scene) this._models[t] = loaded.scene;
+                else this._models[t] = loaded;
+            } else {
+                console.warn(`[AnimalManager] Failed to load any model for ${t} from candidates`, candidates);
+            }
+        }
     }
 
     unloadChunkAnimals(cx, cz) {

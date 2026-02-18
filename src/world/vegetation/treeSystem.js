@@ -52,8 +52,8 @@ const treeMaterialMed = treeMaterialHigh.clone();
  */
 function _mergeSimple(trunkGeo, canopyGeo) {
     // Normalize to non-indexed geometries so we can concatenate attributes
-    trunkGeo = trunkGeo.toNonIndexed();
-    canopyGeo = canopyGeo.toNonIndexed();
+    if (trunkGeo.index) trunkGeo = trunkGeo.toNonIndexed();
+    if (canopyGeo.index) canopyGeo = canopyGeo.toNonIndexed();
 
     const trunkCount = trunkGeo.attributes.position.count;
     const canopyCount = canopyGeo.attributes.position.count;

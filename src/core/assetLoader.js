@@ -60,9 +60,71 @@ export class AssetLoader {
      */
     async loadModel(url) {
         if (this.cache.has(url)) return this.cache.get(url);
-        // TODO: implement with GLTFLoader
-        console.warn(`[AssetLoader] loadModel() not yet implemented — ${url}`);
-        return null;
+        // Ensure we have a GLTFLoader implementation. We fetch the module
+        // source from a CDN, rewrite its import of 'three' to the local
+        // module served at `/src/libs/three.module.min.js`, then import it as
+        // a blob so the loader uses the same Three build as the engine.
+        if (!this._gltfLoaderModule) {
+            await this._loadGLTFLoaderFromCDN();
+        }
+
+        const { GLTFLoader } = this._gltfLoaderModule;
+        return new Promise((resolve, reject) => {
+            const loader = new GLTFLoader(this.manager);
+            loader.load(
+                url,
+                (gltf) => {
+                    // Post-process textures to ensure correct color space/encoding
+                    try {
+                        gltf.scene.traverse((node) => {
+                            if (node.isMesh) {
+                                const mats = Array.isArray(node.material) ? node.material : [node.material];
+                                for (const mat of mats) {
+                                    if (!mat) continue;
+                                    const maps = ['map','aoMap','emissiveMap','metalnessMap','roughnessMap','normalMap','alphaMap','envMap'];
+                                    for (const k of maps) {
+                                        if (mat[k] && mat[k].isTexture) {
+                                            const tex = mat[k];
+                                            // Prefer new colorSpace API when available
+                                            if (typeof tex.colorSpace !== 'undefined' && typeof THREE.SRGBColorSpace !== 'undefined') {
+                                                tex.colorSpace = THREE.SRGBColorSpace;
+                                            } else if (typeof tex.encoding !== 'undefined' && typeof THREE.sRGBEncoding !== 'undefined') {
+                                                tex.encoding = THREE.sRGBEncoding;
+                                            }
+                                            tex.needsUpdate = true;
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    } catch (e) {
+                        console.warn('[AssetLoader] Error post-processing glTF textures', e);
+                    }
+                    this.cache.set(url, gltf);
+                    resolve(gltf);
+                },
+                undefined,
+                (err) => {
+                    console.error(`[AssetLoader] Failed to load model: ${url}`, err);
+                    reject(err);
+                }
+            );
+        });
+    }
+
+    async _loadGLTFLoaderFromCDN() {
+        if (this._gltfLoaderModule) return this._gltfLoaderModule;
+        try {
+            // Import the local copy from src/libs. The import map in index.html
+            // already maps 'three' to the local `three.module.min.js` so the
+            // loader's internal `import 'three'` will resolve correctly.
+            const mod = await import('/src/libs/GLTFLoader.js');
+            this._gltfLoaderModule = mod;
+            return mod;
+        } catch (e) {
+            console.error('[AssetLoader] Failed to import local GLTFLoader', e);
+            throw e;
+        }
     }
 
     /** Dispose a specific cached asset. */
