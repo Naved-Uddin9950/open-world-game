@@ -4,13 +4,114 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Open World Game</title>
+    <title>Open World — Forest Engine</title>
+    <meta name="description" content="A scalable Three.js open-world first-person forest game engine.">
+    <style>
+        /* ── Reset ──────────────────────────────────────────── */
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        /* ── Canvas ─────────────────────────────────────────── */
+        #game-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* ── Click-to-play overlay ──────────────────────────── */
+        #overlay {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.55);
+            z-index: 100;
+            cursor: pointer;
+            transition: opacity 0.4s ease;
+        }
+
+        #overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #overlay h1 {
+            color: #fff;
+            font-size: 2.4rem;
+            font-weight: 300;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 0.8rem;
+        }
+
+        #overlay p {
+            color: rgba(255, 255, 255, 0.65);
+            font-size: 1rem;
+        }
+
+        #overlay .controls {
+            margin-top: 2rem;
+            color: rgba(255, 255, 255, 0.45);
+            font-size: 0.85rem;
+            text-align: center;
+            line-height: 1.8;
+        }
+    </style>
 </head>
 
 <body>
-    <h1 class="bg-red-500">jdksjdskd</h1>
-    <script src="./src/libs/talwind.js"></script>
-    <script type="module" src="./src/libs/three.js"></script>
+    <!-- Game canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Click-to-play overlay -->
+    <div id="overlay">
+        <h1>Open World</h1>
+        <p>Click anywhere to start</p>
+        <div class="controls">
+            WASD — Move &nbsp;|&nbsp; Mouse — Look<br>
+            Shift — Sprint &nbsp;|&nbsp; Space — Jump
+        </div>
+    </div>
+
+    <!-- Three.js import map (ESM CDN) -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "./src/libs/three.module.min.js"
+        }
+    }
+    </script>
+
+    <!-- Engine entry point -->
+    <script type="module" src="./src/main.js"></script>
+
+    <!-- Overlay hide on pointer lock -->
+    <script>
+        document.addEventListener('pointerlockchange', () => {
+            const overlay = document.getElementById('overlay');
+            if (document.pointerLockElement) {
+                overlay.classList.add('hidden');
+            } else {
+                overlay.classList.remove('hidden');
+            }
+        });
+    </script>
 </body>
 
 </html>

@@ -1,0 +1,150 @@
+// ============================================================
+// firstPersonController.js — FPS camera + WASD + pointer lock
+// ============================================================
+import * as THREE from 'three';
+import { MOUSE_SENSITIVITY, PLAYER_HEIGHT } from '../utils/constants.js';
+import { clamp } from '../utils/math.js';
+import { Movement } from './movement.js';
+import { Collision } from './collision.js';
+
+export class FirstPersonController {
+    /**
+     * @param {THREE.PerspectiveCamera} camera
+     * @param {HTMLElement}             domElement  Element for pointer lock
+     */
+    constructor(camera, domElement) {
+        this.camera = camera;
+        this.domElement = domElement;
+
+        // ── Sub-systems ─────────────────────────────────────
+        this.movement = new Movement();
+        this.collision = new Collision();
+
+        // ── Player container (yaw rotation lives here) ──────
+        this.player = new THREE.Object3D();
+        this.player.position.set(0, PLAYER_HEIGHT, 0);
+        this.player.add(camera);
+        camera.position.set(0, 0, 0); // camera is at player eye level
+
+        // ── Mouse look state ────────────────────────────────
+        this._euler = new THREE.Euler(0, 0, 0, 'YXZ');
+        this._isLocked = false;
+
+        // ── Bind methods ────────────────────────────────────
+        this._onMouseMove = this._onMouseMove.bind(this);
+        this._onKeyDown = this._onKeyDown.bind(this);
+        this._onKeyUp = this._onKeyUp.bind(this);
+        this._onPointerLockChange = this._onPointerLockChange.bind(this);
+
+        this._initListeners();
+    }
+
+    /** Wire up DOM events. */
+    _initListeners() {
+        document.addEventListener('mousemove', this._onMouseMove);
+        document.addEventListener('keydown', this._onKeyDown);
+        document.addEventListener('keyup', this._onKeyUp);
+        document.addEventListener('pointerlockchange', this._onPointerLockChange);
+
+        // Click to lock
+        this.domElement.addEventListener('click', () => {
+            if (!this._isLocked) this.domElement.requestPointerLock();
+        });
+    }
+
+    _onPointerLockChange() {
+        this._isLocked = document.pointerLockElement === this.domElement;
+    }
+
+    /** Mouse look. */
+    _onMouseMove(e) {
+        if (!this._isLocked) return;
+
+        this._euler.setFromQuaternion(this.camera.quaternion);
+
+        this._euler.y -= e.movementX * MOUSE_SENSITIVITY;
+        this._euler.x -= e.movementY * MOUSE_SENSITIVITY;
+
+        // Clamp pitch to prevent flipping
+        this._euler.x = clamp(this._euler.x, -Math.PI / 2 + 0.01, Math.PI / 2 - 0.01);
+
+        this.camera.quaternion.setFromEuler(this._euler);
+    }
+
+    /** Key down handler. */
+    _onKeyDown(e) {
+        switch (e.code) {
+            case 'KeyW': case 'ArrowUp': this.movement.forward = true; break;
+            case 'KeyS': case 'ArrowDown': this.movement.backward = true; break;
+            case 'KeyA': case 'ArrowLeft': this.movement.left = true; break;
+            case 'KeyD': case 'ArrowRight': this.movement.right = true; break;
+            case 'ShiftLeft': this.movement.isSprinting = true; break;
+            case 'Space': this.movement.jump = true; break;
+        }
+    }
+
+    /** Key up handler. */
+    _onKeyUp(e) {
+        switch (e.code) {
+            case 'KeyW': case 'ArrowUp': this.movement.forward = false; break;
+            case 'KeyS': case 'ArrowDown': this.movement.backward = false; break;
+            case 'KeyA': case 'ArrowLeft': this.movement.left = false; break;
+            case 'KeyD': case 'ArrowRight': this.movement.right = false; break;
+            case 'ShiftLeft': this.movement.isSprinting = false; break;
+            case 'Space':
+                this.movement.jump = false;
+                this.movement.canJump = true;
+                break;
+        }
+    }
+
+    /**
+     * Called every fixed-step update.
+     * @param {number} dt  Delta time in seconds
+     */
+    update(dt) {
+        if (!this._isLocked) return;
+
+        // Get camera euler for movement direction
+        this._euler.setFromQuaternion(this.camera.quaternion);
+
+        // Compute displacement
+        const displacement = this.movement.update(dt, this._euler);
+
+        // Apply horizontal
+        this.player.position.x += displacement.x;
+        this.player.position.z += displacement.z;
+
+        // Apply vertical
+        this.player.position.y += displacement.y;
+
+        // Ground collision
+        const { grounded, groundY } = this.collision.checkGround(this.player.position);
+        if (grounded && this.player.position.y <= groundY + PLAYER_HEIGHT) {
+            this.player.position.y = groundY + PLAYER_HEIGHT;
+            this.movement.land(groundY);
+        } else if (!grounded && this.player.position.y <= PLAYER_HEIGHT) {
+            // Fallback to world floor
+            this.player.position.y = PLAYER_HEIGHT;
+            this.movement.land(0);
+        }
+    }
+
+    /** Get the player's world position. */
+    getPosition() {
+        return this.player.position;
+    }
+
+    /** Register ground / obstacle colliders. */
+    addColliders(...objects) {
+        this.collision.addColliders(...objects);
+    }
+
+    /** Clean up event listeners. */
+    dispose() {
+        document.removeEventListener('mousemove', this._onMouseMove);
+        document.removeEventListener('keydown', this._onKeyDown);
+        document.removeEventListener('keyup', this._onKeyUp);
+        document.removeEventListener('pointerlockchange', this._onPointerLockChange);
+    }
+}
