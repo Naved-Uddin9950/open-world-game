@@ -8,6 +8,26 @@
  */
 
 const PRESETS = {
+  VERY_LOW: {
+    label: 'Very Low',
+    resolution: 0.35,
+    shadows: false,
+    grass: false,
+    trees: false,
+    renderDist: 1,
+    terrainSegHigh: 12,
+    terrainSegMed: 6,
+    terrainSegLow: 3,
+    maxTreesPerChunk: 0,
+    maxGrassPerChunk: 0,
+    maxRocksPerChunk: 0,
+    maxAnimalsPerChunk: 3,
+    grassRenderDist: 0,
+    fogNear: 20,
+    fogFar: 80,
+    animalUpdateRate: 5,
+    waterQuality: 0,
+  },
   LOW: {
     label: 'Low',
     resolution: 0.5,

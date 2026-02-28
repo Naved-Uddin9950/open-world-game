@@ -46,6 +46,11 @@ export class FirstPersonController {
     this.canSprint = true;
     this.isDead = false;
 
+    /** External speed multiplier from buffs (e.g. Godspeed). Set by EffectSystem. */
+    this.externalSpeedMult = 1.0;
+    /** Shield absorption from EffectSystem. */
+    this.shieldAbsorb = 0;
+
     // ── Attack state ────────────────────────────────────
     this.isAttacking = false;
     this.attackCooldown = 0.5;  // seconds between attacks
@@ -58,6 +63,7 @@ export class FirstPersonController {
     // ── Callbacks ───────────────────────────────────────
     this._onDeath = null;     // called when player dies
     this._onEscape = null;    // called when ESC pressed
+    this._onSkillUse = null;  // called when number key pressed: (key) => void
 
     // ── HUD elements ────────────────────────────────────
     this._hudCreated = false;
@@ -157,6 +163,20 @@ export class FirstPersonController {
         break;
       case "Escape":
         if (this._onEscape) this._onEscape();
+        break;
+      case "Digit1": case "Digit2": case "Digit3": case "Digit4":
+      case "Digit5": case "Digit6": case "Digit7": case "Digit8":
+      case "Digit9": case "Digit0":
+        if (this._onSkillUse) this._onSkillUse(e.code.replace('Digit', ''));
+        break;
+      case "KeyP":
+        if (this._onOpenProfile) this._onOpenProfile();
+        break;
+      case "KeyK":
+        if (this._onOpenSkillTree) this._onOpenSkillTree();
+        break;
+      case "KeyB":
+        if (this._onOpenShop) this._onOpenShop();
         break;
     }
   }
@@ -280,6 +300,13 @@ export class FirstPersonController {
    */
   takeDamage(amount) {
     if (this.isDead) return;
+    // Shield absorbs damage first
+    if (this.shieldAbsorb > 0) {
+      const absorbed = Math.min(this.shieldAbsorb, amount);
+      this.shieldAbsorb -= absorbed;
+      amount -= absorbed;
+      if (amount <= 0) return;
+    }
     this.health = Math.max(0, this.health - amount);
     if (this.health <= 0) {
       this.isDead = true;
@@ -298,6 +325,10 @@ export class FirstPersonController {
    */
   setDeathCallback(fn) { this._onDeath = fn; }
   setEscapeCallback(fn) { this._onEscape = fn; }
+  setSkillUseCallback(fn) { this._onSkillUse = fn; }
+  setOpenProfileCallback(fn) { this._onOpenProfile = fn; }
+  setOpenSkillTreeCallback(fn) { this._onOpenSkillTree = fn; }
+  setOpenShopCallback(fn) { this._onOpenShop = fn; }
 
   /**
    * Set the attack callback (called by Engine after AI controller is created).
@@ -338,9 +369,9 @@ export class FirstPersonController {
 
     // Override sprint multiplier: Right Shift = 4x speed
     if (this.movement.isSprinting && this.canSprint) {
-      this.movement.sprintMultiplier = 4.0;
+      this.movement.sprintMultiplier = 4.0 * this.externalSpeedMult;
     } else {
-      this.movement.sprintMultiplier = PLAYER_SPRINT_MULT;
+      this.movement.sprintMultiplier = PLAYER_SPRINT_MULT * this.externalSpeedMult;
       if (!this.canSprint) this.movement.isSprinting = false;
     }
 

@@ -119,8 +119,9 @@ export class MainMenu {
       color: rgba(255,255,255,0.3); font-size: 0.8rem; line-height: 1.8;
     `;
     controls.innerHTML = `
-      WASD — Move &nbsp;|&nbsp; Mouse — Look &nbsp;|&nbsp; Shift — Sprint<br>
-      Space — Jump &nbsp;|&nbsp; Enter — Attack &nbsp;|&nbsp; ESC — Pause Menu
+      WASD — Move &nbsp;|&nbsp; Mouse — Look &nbsp;|&nbsp; R-Shift — Sprint<br>
+      Space — Jump &nbsp;|&nbsp; Enter — Attack &nbsp;|&nbsp; 1-0 — Skills<br>
+      P — Profile &nbsp;|&nbsp; K — Skill Tree &nbsp;|&nbsp; B — Shop &nbsp;|&nbsp; ESC — Pause
     `;
     el.appendChild(controls);
 

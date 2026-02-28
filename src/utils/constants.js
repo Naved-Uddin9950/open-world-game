@@ -36,6 +36,7 @@ export const LOD_DISTANCES = [30, 80, 200];
 
 // ── Performance Tiers ───────────────────────────────────────
 export const QUALITY_TIERS = {
+  VERY_LOW: { shadowMap: false, pixelRatio: 0.5, renderScale: 0.35 },
   LOW: { shadowMap: false, pixelRatio: 1.0, renderScale: 0.65 },
   MEDIUM: { shadowMap: true, pixelRatio: 1.0, renderScale: 0.85 },
   HIGH: { shadowMap: true, pixelRatio: 1.0, renderScale: 1.0 },

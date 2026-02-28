@@ -27,6 +27,9 @@ export class AnimalAIController {
     this._healthBars = new Map();
     this._time = 0;
     this._camWorldPos = new THREE.Vector3();
+
+    /** Callback when an animal is killed: (type, mesh) => void */
+    this._onKillCallback = null;
   }
 
   _getOrCreateBrain(mesh) {
@@ -119,9 +122,16 @@ export class AnimalAIController {
     this._cleanupBrains(animals);
   }
 
+  /** Set a callback for when an animal is killed. */
+  setKillCallback(fn) { this._onKillCallback = fn; }
+
   _handleDeath(mesh, brain, dt) {
     if (!mesh.userData._deathTimer) {
       mesh.userData._deathTimer = 0;
+      // Fire kill callback once at the start of death
+      if (this._onKillCallback) {
+        this._onKillCallback(brain.type, mesh);
+      }
     }
     mesh.userData._deathTimer += dt;
 
@@ -268,6 +278,7 @@ export class AnimalAIController {
 
   playerAttack(playerPos, playerForward, attackRange = 3.0, attackDamage = 0.25) {
     let hitAny = false;
+    const hitList = [];
     for (const [uuid, brain] of this._brains) {
       if (brain.isDead) continue;
       const dist = brain.position.distanceTo(playerPos);
@@ -283,7 +294,42 @@ export class AnimalAIController {
         mesh: { position: playerPos },
       });
       hitAny = true;
+      hitList.push({ brain, mesh: brain.mesh, type: brain.type, dist });
     }
     return hitAny;
+  }
+
+  /**
+   * Get all enemy brains within a radius of a position (for AoE skills).
+   * Returns array of { brain, mesh }.
+   */
+  getEnemiesInRadius(pos, radius) {
+    const results = [];
+    for (const [uuid, brain] of this._brains) {
+      if (brain.isDead) continue;
+      if (brain.position.distanceTo(pos) <= radius) {
+        results.push({ brain, mesh: brain.mesh });
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Apply damage + effect to a specific enemy brain.
+   * @param {{ brain:object, mesh:object }} target
+   * @param {number} damage  (0-1 scale for brain.takeDamage)
+   * @param {string} effectType
+   * @param {number} effectDuration
+   */
+  damageEnemy(target, damage, effectType, effectDuration) {
+    if (!target || !target.brain || target.brain.isDead) return;
+    // brain.takeDamage expects 0-1 scale; skills deal integer damage on a 100 HP scale
+    // Convert: if brain.maxHealth is 1.0, divide by 100
+    const scaledDmg = target.brain.maxHealth <= 2 ? damage / 100 : damage;
+    target.brain.takeDamage(scaledDmg, {
+      type: 'skill',
+      position: target.mesh ? target.mesh.position.clone() : new THREE.Vector3(),
+      mesh: { position: target.mesh ? target.mesh.position : new THREE.Vector3() },
+    });
   }
 }
