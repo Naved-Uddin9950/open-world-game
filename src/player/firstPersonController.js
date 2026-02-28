@@ -2,7 +2,7 @@
 // firstPersonController.js — FPS camera + WASD + pointer lock
 // ============================================================
 import * as THREE from "three";
-import { MOUSE_SENSITIVITY, PLAYER_HEIGHT } from "../utils/constants.js";
+import { MOUSE_SENSITIVITY, PLAYER_HEIGHT, PLAYER_SPEED, PLAYER_SPRINT_MULT } from "../utils/constants.js";
 import { clamp } from "../utils/math.js";
 import { Movement } from "./movement.js";
 import { Collision } from "./collision.js";
@@ -34,6 +34,28 @@ export class FirstPersonController {
     this._euler = new THREE.Euler(0, 0, 0, "YXZ");
     this._isLocked = false;
 
+    // ── Player stats ────────────────────────────────────
+    this.health = 1.0;
+    this.maxHealth = 1.0;
+    this.stamina = 1.0;
+    this.maxStamina = 1.0;
+    this.staminaDrainSprint = 0.12;  // per second when sprinting (4x speed)
+    this.staminaDrainWalk = 0.0;     // no drain for walking
+    this.staminaRecovery = 0.06;     // per second when not sprinting
+    this.canSprint = true;
+    this.isDead = false;
+
+    // ── Attack state ────────────────────────────────────
+    this.isAttacking = false;
+    this.attackCooldown = 0.5;  // seconds between attacks
+    this._attackTimer = 0;
+    this.attackRange = 3.0;
+    this.attackDamage = 0.25;
+    this._onAttack = null;  // callback set by Engine: (playerPos, forward, range, damage) => {}
+
+    // ── HUD elements ────────────────────────────────────
+    this._hudCreated = false;
+
     // ── Bind methods ────────────────────────────────────
     this._onMouseMove = this._onMouseMove.bind(this);
     this._onKeyDown = this._onKeyDown.bind(this);
@@ -41,6 +63,7 @@ export class FirstPersonController {
     this._onPointerLockChange = this._onPointerLockChange.bind(this);
 
     this._initListeners();
+    this._createHUD();
   }
 
   /**
@@ -109,8 +132,14 @@ export class FirstPersonController {
       case "ShiftLeft":
         this.movement.isSprinting = true;
         break;
+      case "ShiftRight":
+        this.movement.isSprinting = true;
+        break;
       case "Space":
         this.movement.jump = true;
+        break;
+      case "Enter":
+        this.isAttacking = true;
         break;
     }
   }
@@ -137,11 +166,120 @@ export class FirstPersonController {
       case "ShiftLeft":
         this.movement.isSprinting = false;
         break;
+      case "ShiftRight":
+        this.movement.isSprinting = false;
+        break;
       case "Space":
         this.movement.jump = false;
         this.movement.canJump = true;
         break;
+      case "Enter":
+        this.isAttacking = false;
+        break;
     }
+  }
+
+  /**
+   * Create player HUD (health bar, stamina bar, crosshair).
+   */
+  _createHUD() {
+    if (this._hudCreated) return;
+    this._hudCreated = true;
+
+    const hud = document.createElement('div');
+    hud.id = 'player-hud';
+    hud.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:1000;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:4px;';
+
+    // Health bar
+    const hpBar = document.createElement('div');
+    hpBar.style.cssText = 'width:200px;height:14px;background:#333;border-radius:3px;overflow:hidden;border:1px solid #555;';
+    const hpFill = document.createElement('div');
+    hpFill.id = 'player-hp-fill';
+    hpFill.style.cssText = 'width:100%;height:100%;background:#22cc22;transition:width 0.2s;';
+    hpBar.appendChild(hpFill);
+    hud.appendChild(hpBar);
+
+    // Stamina bar
+    const stBar = document.createElement('div');
+    stBar.style.cssText = 'width:200px;height:8px;background:#333;border-radius:3px;overflow:hidden;border:1px solid #555;';
+    const stFill = document.createElement('div');
+    stFill.id = 'player-st-fill';
+    stFill.style.cssText = 'width:100%;height:100%;background:#ffcc00;transition:width 0.2s;';
+    stBar.appendChild(stFill);
+    hud.appendChild(stBar);
+
+    // Labels
+    const labelRow = document.createElement('div');
+    labelRow.style.cssText = 'display:flex;justify-content:space-between;width:200px;font-size:10px;color:#fff;font-family:monospace;text-shadow:1px 1px 2px #000;';
+    const hpLabel = document.createElement('span');
+    hpLabel.id = 'player-hp-label';
+    hpLabel.textContent = 'HP: 100%';
+    const stLabel = document.createElement('span');
+    stLabel.id = 'player-st-label';
+    stLabel.textContent = 'ST: 100%';
+    labelRow.appendChild(hpLabel);
+    labelRow.appendChild(stLabel);
+    hud.appendChild(labelRow);
+
+    document.body.appendChild(hud);
+
+    // Crosshair
+    const crosshair = document.createElement('div');
+    crosshair.id = 'crosshair';
+    crosshair.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:999;pointer-events:none;width:20px;height:20px;';
+    crosshair.innerHTML = '<svg width="20" height="20"><line x1="10" y1="2" x2="10" y2="8" stroke="white" stroke-width="2"/><line x1="10" y1="12" x2="10" y2="18" stroke="white" stroke-width="2"/><line x1="2" y1="10" x2="8" y2="10" stroke="white" stroke-width="2"/><line x1="12" y1="10" x2="18" y2="10" stroke="white" stroke-width="2"/></svg>';
+    document.body.appendChild(crosshair);
+  }
+
+  /**
+   * Update the HUD display.
+   */
+  _updateHUD() {
+    const hpFill = document.getElementById('player-hp-fill');
+    const stFill = document.getElementById('player-st-fill');
+    const hpLabel = document.getElementById('player-hp-label');
+    const stLabel = document.getElementById('player-st-label');
+
+    if (hpFill) {
+      const hpPct = Math.max(0, Math.min(100, (this.health / this.maxHealth) * 100));
+      hpFill.style.width = hpPct + '%';
+      if (hpPct > 60) hpFill.style.background = '#22cc22';
+      else if (hpPct > 30) hpFill.style.background = '#cccc22';
+      else hpFill.style.background = '#cc2222';
+    }
+    if (stFill) {
+      const stPct = Math.max(0, Math.min(100, (this.stamina / this.maxStamina) * 100));
+      stFill.style.width = stPct + '%';
+      if (!this.canSprint) stFill.style.background = '#cc6600';
+      else stFill.style.background = '#ffcc00';
+    }
+    if (hpLabel) hpLabel.textContent = 'HP: ' + Math.round((this.health / this.maxHealth) * 100) + '%';
+    if (stLabel) stLabel.textContent = 'ST: ' + Math.round((this.stamina / this.maxStamina) * 100) + '%';
+  }
+
+  /**
+   * Player takes damage from an animal.
+   * @param {number} amount
+   */
+  takeDamage(amount) {
+    this.health = Math.max(0, this.health - amount);
+    if (this.health <= 0) {
+      this.isDead = true;
+    }
+    // Red flash effect
+    const flash = document.createElement('div');
+    flash.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(255,0,0,0.3);z-index:998;pointer-events:none;transition:opacity 0.3s;';
+    document.body.appendChild(flash);
+    setTimeout(() => { flash.style.opacity = '0'; }, 50);
+    setTimeout(() => { flash.remove(); }, 350);
+  }
+
+  /**
+   * Set the attack callback (called by Engine after AI controller is created).
+   * @param {Function} callback (playerPos, forward, range, damage) => void
+   */
+  setAttackCallback(callback) {
+    this._onAttack = callback;
   }
 
   /**
@@ -150,6 +288,54 @@ export class FirstPersonController {
    */
   update(dt) {
     if (!this._isLocked) return;
+    if (this.isDead) return;
+
+    // ── Stamina system ──────────────────────────────────────
+    if (this.movement.isSprinting && (this.movement.forward || this.movement.backward || this.movement.left || this.movement.right)) {
+      // Sprint: 4x speed mult, 4x stamina consumption
+      if (this.canSprint && this.stamina > 0) {
+        this.stamina = Math.max(0, this.stamina - this.staminaDrainSprint * dt);
+        if (this.stamina <= 0) {
+          this.canSprint = false;
+          this.movement.isSprinting = false;
+        }
+      } else {
+        // Can't sprint — force walking
+        this.movement.isSprinting = false;
+      }
+    } else {
+      // Recover stamina when not sprinting
+      this.stamina = Math.min(this.maxStamina, this.stamina + this.staminaRecovery * dt);
+      if (!this.canSprint && this.stamina > 0.15) {
+        this.canSprint = true;
+      }
+    }
+
+    // Override sprint multiplier: Right Shift = 4x speed
+    if (this.movement.isSprinting && this.canSprint) {
+      this.movement.sprintMultiplier = 4.0;
+    } else {
+      this.movement.sprintMultiplier = PLAYER_SPRINT_MULT;
+      if (!this.canSprint) this.movement.isSprinting = false;
+    }
+
+    // Health regeneration (slow)
+    this.health = Math.min(this.maxHealth, this.health + 0.005 * dt);
+
+    // ── Attack system ───────────────────────────────────────
+    this._attackTimer = Math.max(0, this._attackTimer - dt);
+    if (this.isAttacking && this._attackTimer <= 0) {
+      this._attackTimer = this.attackCooldown;
+      // Get forward direction
+      const forward = new THREE.Vector3(0, 0, -1);
+      forward.applyQuaternion(this.camera.quaternion);
+      forward.y = 0;
+      forward.normalize();
+
+      if (this._onAttack) {
+        this._onAttack(this.player.position.clone(), forward, this.attackRange, this.attackDamage);
+      }
+    }
 
     // Ensure internal euler matches camera for look (movement uses camera directly)
     this._euler.setFromQuaternion(this.camera.quaternion);
@@ -205,9 +391,7 @@ export class FirstPersonController {
     this.player.position.y += displacement.y;
 
     // Ground collision — prefer heightmap, fallback to raycaster
-    // Allow stepping down small drops immediately, but for larger drops
-    // let the player fall (gravity) so movement feels natural.
-    const MAX_STEP_DOWN = 1.0; // meters — max drop height that will be snapped
+    const MAX_STEP_DOWN = 1.0;
     if (this._getHeightAt) {
       const groundY = this._getHeightAt(
         this.player.position.x,
@@ -217,16 +401,12 @@ export class FirstPersonController {
       const drop = this.player.position.y - targetY;
 
       if (drop <= 0) {
-        // Player is at or below the target — snap up and land
         this.player.position.y = targetY;
         this.movement.land(groundY);
       } else if (drop <= MAX_STEP_DOWN && this.movement.velocity.y <= 0) {
-        // Small step down while falling: snap to ground and land
-        // (don't snap when the player is moving upward from a jump)
         this.player.position.y = targetY;
         this.movement.land(groundY);
       } else {
-        // Large drop or moving upward: allow falling or rising
         this.movement.isGrounded = false;
       }
     } else {
@@ -238,7 +418,6 @@ export class FirstPersonController {
         const drop = this.player.position.y - targetY;
 
         if (drop <= MAX_STEP_DOWN && this.movement.velocity.y <= 0) {
-          // Only snap to ground for small drops when player is not rising
           this.player.position.y = targetY;
           this.movement.land(groundY);
         } else {
@@ -251,11 +430,23 @@ export class FirstPersonController {
         this.movement.isGrounded = false;
       }
     }
+
+    // ── Update HUD ──────────────────────────────────────────
+    this._updateHUD();
   }
 
   /** Get the player's world position. */
   getPosition() {
     return this.player.position;
+  }
+
+  /** Get the camera's forward direction (horizontal). */
+  getForward() {
+    const forward = new THREE.Vector3(0, 0, -1);
+    forward.applyQuaternion(this.camera.quaternion);
+    forward.y = 0;
+    forward.normalize();
+    return forward;
   }
 
   /** Register ground / obstacle colliders. */
@@ -277,5 +468,10 @@ export class FirstPersonController {
       "pointerlockchange",
       this._onPointerLockChange,
     );
+    // Remove HUD
+    const hud = document.getElementById('player-hud');
+    if (hud) hud.remove();
+    const crosshair = document.getElementById('crosshair');
+    if (crosshair) crosshair.remove();
   }
 }

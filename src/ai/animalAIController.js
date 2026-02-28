@@ -1,63 +1,98 @@
+// ============================================================
+// animalAIController.js — Orchestrates all animal AI brains
+// ============================================================
 import * as THREE from 'three';
+import { WolfBrain } from './wolfBrain.js';
+import { DeerBrain } from './deerBrain.js';
+import { CowBrain } from './cowBrain.js';
+import { ChickenBrain } from './chickenBrain.js';
 import {
-  WOLF_DETECTION_RADIUS,
-  WOLF_ATTACK_RANGE,
-  WOLF_BASE_SPEED,
-  WOLF_CHASE_SPEED_MULT,
-  CHICKEN_FEAR_RADIUS,
-  CHICKEN_PANIC_SPEED,
-  CHICKEN_WANDER_SPEED,
-  DEER_FEAR_RADIUS,
-  DEER_PANIC_SPEED,
-  DEER_NORMAL_SPEED,
-  COW_WOLF_FEAR_RADIUS,
-  COW_NORMAL_SPEED,
-  COW_REACTION_DELAY,
   ANIMAL_DAY_ACTIVITY,
 } from '../utils/constants.js';
 
-import { decideWolfBehavior } from './wolfBrain.js';
-import { decideChickenBehavior } from './chickenBrain.js';
-import { decideCowBehavior } from './cowBrain.js';
-import { decideDeerBehavior } from './deerBrain.js';
-
 /**
- * AnimalAIController — runs animal brains and applies simple motion each update.
- * Usage: const ai = new AnimalAIController(scene, worldManager, { dayProvider: () => timeSystem.isDay });
- * Then call ai.update(dt) from your fixed-step loop.
+ * AnimalAIController — manages all animal brains and updates them each frame.
+ * 
+ * Usage:
+ *   const ai = new AnimalAIController(scene, worldManager, {
+ *     dayProvider: () => timeSystem.isDay(),
+ *     playerRef: firstPersonController,
+ *   });
+ *   // In game loop:
+ *   ai.update(dt);
  */
 export class AnimalAIController {
+  /**
+   * @param {THREE.Scene} scene
+   * @param {object} worldManager
+   * @param {object} options
+   */
   constructor(scene, worldManager, options = {}) {
     this.scene = scene;
     this.world = worldManager;
     this.player = (worldManager && worldManager._player) ? worldManager._player : null;
     this.dayProvider = options.dayProvider || (() => true);
+    this.playerRef = options.playerRef || null;
 
-    this._animals = new Map(); // mesh.uuid -> state
-    this._tempVec = new THREE.Vector3();
+    // Brain instances per animal (mesh.uuid -> Brain)
+    this._brains = new Map();
+
+    // Entity cache for perception (rebuilt each frame)
+    this._entityCache = [];
+
+    // Health bar sprites
+    this._healthBars = new Map();
+
     this._time = 0;
   }
 
-  _ensureState(mesh) {
-    let s = this._animals.get(mesh.uuid);
-    if (!s) {
-      s = {
-        behavior: 'idle',
-        wanderTarget: new THREE.Vector3(),
-        wanderTimer: 0,
-        reactionTimer: 0,
-      };
-      this._animals.set(mesh.uuid, s);
+  /**
+   * Get or create a brain for an animal mesh.
+   * @param {THREE.Mesh} mesh
+   * @returns {AnimalBrain|null}
+   */
+  _getOrCreateBrain(mesh) {
+    if (this._brains.has(mesh.uuid)) {
+      return this._brains.get(mesh.uuid);
     }
-    return s;
+
+    const type = mesh.userData.type;
+    let brain = null;
+
+    switch (type) {
+      case 'wolf':
+        brain = new WolfBrain(mesh);
+        break;
+      case 'deer':
+        brain = new DeerBrain(mesh);
+        break;
+      case 'cow':
+        brain = new CowBrain(mesh);
+        break;
+      case 'chicken':
+        brain = new ChickenBrain(mesh);
+        break;
+      default:
+        return null;
+    }
+
+    this._brains.set(mesh.uuid, brain);
+    mesh.userData._brain = brain;
+
+    // Create health/stamina bar
+    this._createHealthBar(mesh, brain);
+
+    return brain;
   }
 
+  /**
+   * Collect all animal meshes from the scene.
+   */
   _collectAnimals() {
     const animals = [];
     for (const child of this.scene.children) {
       if (typeof child.name === 'string' && child.name.startsWith('animals:')) {
         for (const m of child.children) {
-          // Skip raw collider objects named 'animalCollider'
           if (m.name === 'animalCollider') continue;
           if (m.userData && m.userData.type) animals.push(m);
         }
@@ -66,254 +101,238 @@ export class AnimalAIController {
     return animals;
   }
 
-  _distance(a, b) {
-    return a.distanceTo(b);
+  /**
+   * Build entity list for perception system.
+   */
+  _buildEntityCache(animals) {
+    this._entityCache = [];
+    for (const mesh of animals) {
+      this._entityCache.push({
+        mesh: mesh,
+        type: mesh.userData.type,
+        position: mesh.position,
+        userData: mesh.userData,
+      });
+    }
   }
 
+  /**
+   * Main update — called every fixed-step.
+   * @param {number} dt
+   */
   update(dt) {
     this._time += dt;
 
     const animals = this._collectAnimals();
     const playerPos = this.player ? this.player.player.position : null;
 
-    // Build quick lookup of wolves for prey checks
-    const wolves = animals.filter(a => a.userData.type === 'wolf');
+    // Build entity cache for perception
+    this._buildEntityCache(animals);
 
+    // Day/night activity multiplier
+    const dayMult = this.dayProvider() ? ANIMAL_DAY_ACTIVITY.day : ANIMAL_DAY_ACTIVITY.night;
+
+    // Update each animal brain
     for (const mesh of animals) {
-      const pos = mesh.position;
-      const type = mesh.userData.type;
-      const state = this._ensureState(mesh);
+      const brain = this._getOrCreateBrain(mesh);
+      if (!brain) continue;
 
-      // distances
-      const distToPlayer = playerPos ? pos.distanceTo(playerPos) : Infinity;
-      // nearest wolf distance
-      let nearestWolfDist = Infinity;
-      let nearestWolf = null;
-      for (const w of wolves) {
-        if (w === mesh) continue;
-        const d = pos.distanceTo(w.position);
-        if (d < nearestWolfDist) {
-          nearestWolfDist = d;
-          nearestWolf = w;
-        }
+      // Skip dead animals
+      if (brain.isDead) {
+        this._handleDeath(mesh, brain);
+        continue;
       }
 
-      // Decision & behavior mapping
-      let behavior = 'idle';
+      // Apply day/night multiplier to speeds
+      brain.baseSpeed = brain.baseSpeed; // base stays constant; multiplier applied in movement
+      
+      // Update the brain (perception, NN, FSM, movement)
+      brain.update(dt, this._entityCache, playerPos);
 
-      if (type === 'wolf') {
-        // Compute distances to various possible prey
-        const playerD = distToPlayer;
-        // find nearest chicken, deer, cow distances
-        let chickenD = Infinity, deerD = Infinity, cowD = Infinity;
-        for (const a of animals) {
-          if (a === mesh) continue;
-          const d = a.position.distanceTo(pos);
-          const t = a.userData.type;
-          if (t === 'chicken' && d < chickenD) chickenD = d;
-          if (t === 'deer' && d < deerD) deerD = d;
-          if (t === 'cow' && d < cowD) cowD = d;
-        }
-        const distances = { player: playerD, chicken: chickenD, deer: deerD, cow: cowD };
-        behavior = decideWolfBehavior(distances);
+      // Align to ground after movement
+      this._alignToGround(mesh);
 
-        // Post-process: choose actual target for chase/attack — prefer weakest targets
-        if (behavior === 'chase' || behavior === 'attack') {
-          // score = dist * priorityMultiplier (lower better)
-          const scores = [];
-          if (playerPos) scores.push({ t: 'player', score: (playerD) * 0.9, ref: playerPos });
-          if (chickenD < Infinity) scores.push({ t: 'chicken', score: chickenD * 0.7, ref: null });
-          if (deerD < Infinity) scores.push({ t: 'deer', score: deerD * 1.0, ref: null });
-          if (cowD < Infinity) scores.push({ t: 'cow', score: cowD * 1.3, ref: null });
-          scores.sort((a,b)=>a.score-b.score);
-          if (scores.length>0) {
-            state._targetType = scores[0].t;
-            state._targetPos = scores[0].ref || null;
-          }
-        }
-      } else if (type === 'chicken') {
-        const distances = { player: distToPlayer, wolf: nearestWolfDist };
-        behavior = decideChickenBehavior(distances);
-      } else if (type === 'cow') {
-        const distances = { wolf: nearestWolfDist };
-        behavior = decideCowBehavior(distances);
-        // implement reaction delay for cows
-        if (behavior === 'fleeFromWolf') {
-          state.reactionTimer += dt;
-          if (state.reactionTimer < COW_REACTION_DELAY) {
-            behavior = 'idle';
-          }
-        } else {
-          state.reactionTimer = 0;
-        }
-      } else if (type === 'deer') {
-        const distances = { player: distToPlayer, wolf: nearestWolfDist };
-        behavior = decideDeerBehavior(distances);
-      }
+      // Update health bar
+      this._updateHealthBar(mesh, brain);
+    }
 
-      state.behavior = behavior;
+    // Clean up brains for removed animals
+    this._cleanupBrains(animals);
+  }
 
-      // Movement application
-      const dayMult = this.dayProvider() ? ANIMAL_DAY_ACTIVITY.day : ANIMAL_DAY_ACTIVITY.night;
+  /**
+   * Handle animal death.
+   */
+  _handleDeath(mesh, brain) {
+    // Tilt the mesh (death animation)
+    mesh.rotation.z = Math.PI / 2;
+    mesh.rotation.x = 0;
 
-      if (type === 'wolf') {
-        if (behavior === 'idle') {
-          // slow idle wandering
-          this._applyWander(mesh, state, dt, 0.6 * dayMult);
-        } else if (behavior === 'chase') {
-          // move towards target (player or other)
-          let targetPos = null;
-          if (state._targetType === 'player' && playerPos) targetPos = playerPos;
-          else {
-            // try to locate nearest of chosen type
-            for (const a of animals) if (a.userData.type === state._targetType) { targetPos = a.position; break; }
-          }
-          if (targetPos) this._moveTowards(mesh, targetPos, dt, WOLF_BASE_SPEED * WOLF_CHASE_SPEED_MULT);
-        } else if (behavior === 'attack') {
-          // if target within range, lunge (simple)
-          let tpos = null;
-          if (state._targetType === 'player' && playerPos) tpos = playerPos;
-          else {
-            for (const a of animals) if (a.userData.type === state._targetType) { tpos = a.position; break; }
-          }
-          if (tpos) {
-            const d = mesh.position.distanceTo(tpos);
-            if (d > WOLF_ATTACK_RANGE) this._moveTowards(mesh, tpos, dt, WOLF_BASE_SPEED * WOLF_CHASE_SPEED_MULT * 1.1);
-            else {
-              // perform a simple attack impulse and log
-              this._tempVec.subVectors(tpos, mesh.position).setLength(0.2);
-              mesh.position.add(this._tempVec);
-              this._alignToGround(mesh);
-            }
-          } else {
-            this._applyWander(mesh, state, dt, 0.6 * dayMult);
-          }
-        }
-      }
+    // Remove health bar
+    const bar = this._healthBars.get(mesh.uuid);
+    if (bar) {
+      mesh.remove(bar);
+      this._healthBars.delete(mesh.uuid);
+    }
 
-      if (type === 'chicken') {
-        if (behavior === 'runAway') {
-          // run away from nearest threat (prefer player if close)
-          let threatPos = playerPos;
-          if (nearestWolfDist < distToPlayer) threatPos = nearestWolf ? nearestWolf.position : threatPos;
-          if (threatPos) this._fleeFrom(mesh, threatPos, dt, CHICKEN_PANIC_SPEED);
-        } else if (behavior === 'wander') {
-          this._applyWander(mesh, state, dt, CHICKEN_WANDER_SPEED * dayMult);
-        } else {
-          // idle occasional pecking
-          this._maybeIdleNudge(mesh, dt);
-        }
-      }
-
-      if (type === 'cow') {
-        if (behavior === 'fleeFromWolf') {
-          if (nearestWolf) this._fleeFrom(mesh, nearestWolf.position, dt, COW_NORMAL_SPEED * 1.6);
-        } else if (behavior === 'graze') {
-          this._applyWander(mesh, state, dt, COW_NORMAL_SPEED * 0.5);
-        } else if (behavior === 'walk') {
-          this._applyWander(mesh, state, dt, COW_NORMAL_SPEED * dayMult);
-        } else {
-          this._maybeIdleNudge(mesh, dt);
-        }
-      }
-
-      if (type === 'deer') {
-        if (behavior === 'runAway') {
-          // prefer fleeing from wolf if present
-          const threat = (nearestWolf && nearestWolfDist < distToPlayer) ? nearestWolf.position : playerPos;
-          if (threat) this._fleeZigZag(mesh, threat, dt, DEER_PANIC_SPEED);
-        } else if (behavior === 'alert') {
-          // short burst away from threat but slower
-          const threat = (nearestWolf && nearestWolfDist < distToPlayer) ? nearestWolf.position : playerPos;
-          if (threat) this._fleeFrom(mesh, threat, dt, DEER_NORMAL_SPEED * 1.1);
-        } else if (behavior === 'graze') {
-          this._applyWander(mesh, state, dt, DEER_NORMAL_SPEED * 0.4);
-        } else {
-          this._maybeIdleNudge(mesh, dt);
-        }
-      }
+    // Fade out and remove after delay
+    if (!mesh.userData._deathTimer) {
+      mesh.userData._deathTimer = 0;
+    }
+    mesh.userData._deathTimer += 0.016;
+    if (mesh.userData._deathTimer > 5) {
+      // Remove from scene
+      if (mesh.parent) mesh.parent.remove(mesh);
+      this._brains.delete(mesh.uuid);
     }
   }
 
-  _applyWander(mesh, state, dt, speed) {
-    state.wanderTimer -= dt;
-    if (state.wanderTimer <= 0) {
-      // pick new wander target nearby
-      const r = 6 + Math.random() * 6;
-      const ang = Math.random() * Math.PI * 2;
-      state.wanderTarget.set(
-        mesh.position.x + Math.cos(ang) * r,
-        mesh.position.y,
-        mesh.position.z + Math.sin(ang) * r,
-      );
-      state.wanderTimer = 2 + Math.random() * 4;
-    }
-    this._moveTowards(mesh, state.wanderTarget, dt, speed);
-  }
-
-  _maybeIdleNudge(mesh, dt) {
-    // tiny random movement or rotation while idle
-    if (Math.random() < 0.01) {
-      mesh.rotation.y += (Math.random() - 0.5) * 0.6;
-    }
-  }
-
-  _moveTowards(mesh, targetPos, dt, speed = 1.0) {
-    // speed is meters per second
-    this._tempVec.subVectors(targetPos, mesh.position);
-    this._tempVec.y = 0;
-    const dist = this._tempVec.length();
-    if (dist < 0.01) return;
-    const dir = this._tempVec.normalize();
-    const move = Math.min(dist, (speed * dt));
-    mesh.position.addScaledVector(dir, move);
-    mesh.lookAt(targetPos.x, mesh.position.y, targetPos.z);
-    this._alignToGround(mesh);
-  }
-
-  _fleeFrom(mesh, threatPos, dt, speed) {
-    this._tempVec.subVectors(mesh.position, threatPos);
-    this._tempVec.y = 0;
-    if (this._tempVec.length() < 0.01) {
-      // random jitter if on top
-      this._tempVec.set(Math.random() - 0.5, 0, Math.random() - 0.5).normalize();
-    } else this._tempVec.normalize();
-    mesh.position.addScaledVector(this._tempVec, speed * dt);
-    mesh.lookAt(mesh.position.x + this._tempVec.x, mesh.position.y, mesh.position.z + this._tempVec.z);
-    this._alignToGround(mesh);
-  }
-
-  _fleeZigZag(mesh, threatPos, dt, speed) {
-    // base flee direction
-    const base = new THREE.Vector3().subVectors(mesh.position, threatPos);
-    base.y = 0;
-    if (base.length() < 0.01) base.set(Math.random() - 0.5, 0, Math.random() - 0.5);
-    base.normalize();
-    // perpendicular oscillation
-    const perp = new THREE.Vector3(-base.z, 0, base.x);
-    const oscill = Math.sin(this._time * 10 + mesh.uuid.length) * 0.6;
-    base.addScaledVector(perp, oscill).normalize();
-    mesh.position.addScaledVector(base, speed * dt);
-    mesh.lookAt(mesh.position.x + base.x, mesh.position.y, mesh.position.z + base.z);
-    this._alignToGround(mesh);
-  }
-
+  /**
+   * Align mesh to ground height.
+   */
   _alignToGround(mesh) {
     if (!this.world || typeof this.world.getHeightAt !== 'function') return;
     const x = mesh.position.x;
     const z = mesh.position.z;
     const h = this.world.getHeightAt(x, z);
-    // prefer collider offset if present
-    const offsetY = (mesh.userData && mesh.userData.colliderOffsetY) ? mesh.userData.colliderOffsetY : 0.05;
-    mesh.position.y = h + 0.05; // keep model slightly above ground
-    // update collider if linked
+    mesh.position.y = h + 0.05;
+
+    // Update collider
     if (mesh.userData && mesh.userData.collider) {
       try {
-        mesh.userData.collider.position.set(mesh.position.x, mesh.position.y + (mesh.userData.colliderOffsetY || offsetY), mesh.position.z);
-        if (typeof mesh.userData.collider.updateMatrixWorld === 'function') mesh.userData.collider.updateMatrixWorld(true);
-      } catch (e) {
-        // ignore
+        const offsetY = mesh.userData.colliderOffsetY || 0.05;
+        mesh.userData.collider.position.set(x, h + offsetY, z);
+        if (typeof mesh.userData.collider.updateMatrixWorld === 'function') {
+          mesh.userData.collider.updateMatrixWorld(true);
+        }
+      } catch (e) { /* ignore */ }
+    }
+  }
+
+  /**
+   * Create a health/stamina bar above an animal.
+   */
+  _createHealthBar(mesh, brain) {
+    const barGroup = new THREE.Group();
+    barGroup.name = 'healthBar';
+
+    // Health bar background (red)
+    const bgGeo = new THREE.PlaneGeometry(1.0, 0.08);
+    const bgMat = new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.7 });
+    const bg = new THREE.Mesh(bgGeo, bgMat);
+    bg.name = 'hpBg';
+    barGroup.add(bg);
+
+    // Health bar fill (green)
+    const fillGeo = new THREE.PlaneGeometry(1.0, 0.08);
+    const fillMat = new THREE.MeshBasicMaterial({ color: 0x22cc22, side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.9 });
+    const fill = new THREE.Mesh(fillGeo, fillMat);
+    fill.name = 'hpFill';
+    barGroup.add(fill);
+
+    // Stamina bar background
+    const stBgGeo = new THREE.PlaneGeometry(1.0, 0.05);
+    const stBgMat = new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.6 });
+    const stBg = new THREE.Mesh(stBgGeo, stBgMat);
+    stBg.position.y = -0.09;
+    stBg.name = 'stBg';
+    barGroup.add(stBg);
+
+    // Stamina bar fill (yellow)
+    const stFillGeo = new THREE.PlaneGeometry(1.0, 0.05);
+    const stFillMat = new THREE.MeshBasicMaterial({ color: 0xffcc00, side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.8 });
+    const stFill = new THREE.Mesh(stFillGeo, stFillMat);
+    stFill.position.y = -0.09;
+    stFill.name = 'stFill';
+    barGroup.add(stFill);
+
+    // Position above animal (height varies by type)
+    let barHeight = 1.5;
+    switch (brain.type) {
+      case 'cow': barHeight = 2.0; break;
+      case 'deer': barHeight = 1.8; break;
+      case 'wolf': barHeight = 1.2; break;
+      case 'chicken': barHeight = 0.6; break;
+    }
+    barGroup.position.y = barHeight;
+    barGroup.renderOrder = 999;
+
+    mesh.add(barGroup);
+    this._healthBars.set(mesh.uuid, barGroup);
+  }
+
+  /**
+   * Update health bar visual.
+   */
+  _updateHealthBar(mesh, brain) {
+    const barGroup = this._healthBars.get(mesh.uuid);
+    if (!barGroup) return;
+
+    // Make bar face camera
+    if (this.player && this.player.camera) {
+      barGroup.lookAt(this.player.camera.position || this.player.player.position);
+    }
+
+    // Health fill
+    const hpRatio = brain.health / brain.maxHealth;
+    const hpFill = barGroup.getObjectByName('hpFill');
+    if (hpFill) {
+      hpFill.scale.x = Math.max(0.01, hpRatio);
+      hpFill.position.x = (hpRatio - 1) * 0.5;
+      // Color: green → yellow → red
+      if (hpRatio > 0.6) hpFill.material.color.setHex(0x22cc22);
+      else if (hpRatio > 0.3) hpFill.material.color.setHex(0xcccc22);
+      else hpFill.material.color.setHex(0xcc2222);
+    }
+
+    // Stamina fill
+    const stRatio = brain.stamina / brain.maxStamina;
+    const stFill = barGroup.getObjectByName('stFill');
+    if (stFill) {
+      stFill.scale.x = Math.max(0.01, stRatio);
+      stFill.position.x = (stRatio - 1) * 0.5;
+    }
+
+    // Hide bars if full health and stamina
+    barGroup.visible = (hpRatio < 0.99 || stRatio < 0.95);
+  }
+
+  /**
+   * Clean up brains for animals that are no longer in the scene.
+   */
+  _cleanupBrains(currentAnimals) {
+    const currentIds = new Set(currentAnimals.map(m => m.uuid));
+    for (const [uuid, brain] of this._brains) {
+      if (!currentIds.has(uuid)) {
+        this._brains.delete(uuid);
+        this._healthBars.delete(uuid);
       }
+    }
+  }
+
+  /**
+   * Called when the player attacks. Damages nearby animals.
+   * @param {THREE.Vector3} playerPos
+   * @param {THREE.Vector3} playerForward  Direction player is facing
+   * @param {number} attackRange
+   * @param {number} attackDamage
+   */
+  playerAttack(playerPos, playerForward, attackRange = 3.0, attackDamage = 0.25) {
+    for (const [uuid, brain] of this._brains) {
+      if (brain.isDead) continue;
+      const dist = brain.position.distanceTo(playerPos);
+      if (dist > attackRange) continue;
+
+      // Check if animal is roughly in front of player
+      const toAnimal = new THREE.Vector3().subVectors(brain.position, playerPos).normalize();
+      const dot = playerForward.dot(toAnimal);
+      if (dot < 0.3) continue; // must be within ~70° cone
+
+      brain.takeDamage(attackDamage, {
+        type: 'player',
+        position: playerPos.clone(),
+        mesh: { position: playerPos },
+      });
     }
   }
 }

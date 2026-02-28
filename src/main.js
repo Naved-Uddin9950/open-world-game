@@ -76,7 +76,17 @@ class Engine {
         });
 
         // ── AI controller ───────────────────────────────────
-        this.animalAI = new AnimalAIController(this.gameScene.raw, this.worldManager, { dayProvider: () => this.dayNightCycle.isDay() });
+        this.animalAI = new AnimalAIController(this.gameScene.raw, this.worldManager, {
+            dayProvider: () => this.dayNightCycle.isDay(),
+            playerRef: this.player,
+        });
+
+        // ── Wire player attack to AI controller ─────────────
+        this.player.setAttackCallback((playerPos, forward, range, damage) => {
+            if (this.animalAI) {
+                this.animalAI.playerAttack(playerPos, forward, range, damage);
+            }
+        });
 
         this.loop.start();
     }
