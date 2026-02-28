@@ -22,10 +22,11 @@ export class MainMenu {
    * @param {object} callbacks
    * @param {boolean} canContinue  Whether a save exists
    */
-  setCallbacks({ onContinue, onNewGame, onSettings }) {
+  setCallbacks({ onContinue, onNewGame, onSettings, onProfile }) {
     this._onContinue = onContinue;
     this._onNewGame = onNewGame;
     this._onSettings = onSettings;
+    this._onProfile = onProfile;
   }
 
   setCanContinue(val) {
@@ -103,6 +104,12 @@ export class MainMenu {
       if (this._onNewGame) this._onNewGame();
     });
     btnContainer.appendChild(newGameBtn);
+
+    // Profile button (only useful if a profile exists)
+    this._profileBtn = this._createButton('Profile', () => {
+      if (this._onProfile) this._onProfile();
+    });
+    btnContainer.appendChild(this._profileBtn);
 
     // Settings button
     const settingsBtn = this._createButton('Settings', () => {

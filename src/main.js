@@ -181,13 +181,22 @@ class Engine {
 
         // ── Profile panel callbacks ─────────────────────────
         this.profilePanel.setCallbacks({
-            onClose: () => { this._resumeGame(); },
+            onClose: () => {
+                if (this._gameStarted) this._resumeGame();
+                else this.mainMenu.show();
+            },
         });
         this.skillTreeUI.setCallbacks({
-            onClose: () => { this._resumeGame(); },
+            onClose: () => {
+                if (this._gameStarted) this._resumeGame();
+                else this.mainMenu.show();
+            },
         });
         this.shopUI.setCallbacks({
-            onClose: () => { this._resumeGame(); },
+            onClose: () => {
+                if (this._gameStarted) this._resumeGame();
+                else this.mainMenu.show();
+            },
         });
 
         // ── Initial fog ─────────────────────────────────────
@@ -213,6 +222,12 @@ class Engine {
                 this.newGameScreen.show();
             },
             onSettings: () => { this.mainMenu.hide(); this.settingsPanel.show(); },
+            onProfile: () => {
+                if (this.profile.hasProfile()) {
+                    this.mainMenu.hide();
+                    this.profilePanel.show();
+                }
+            },
         });
         this.mainMenu.setCanContinue(hasSave);
 
@@ -222,6 +237,8 @@ class Engine {
             onSave: () => this._saveGame(),
             onSettings: () => { this.pauseMenu.hide(); this.settingsPanel.show(); },
             onQuit: () => this._quitToMenu(),
+            onProfile: () => { this.pauseMenu.hide(); this.profilePanel.show(); },
+            onShop: () => { this.pauseMenu.hide(); this.shopUI.show(); },
         });
 
         // Game Over callbacks

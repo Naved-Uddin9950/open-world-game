@@ -21,11 +21,13 @@ export class PauseMenu {
     this._saveStatus = null;
   }
 
-  setCallbacks({ onResume, onSave, onSettings, onQuit }) {
+  setCallbacks({ onResume, onSave, onSettings, onQuit, onProfile, onShop }) {
     this._onResume = onResume;
     this._onSave = onSave;
     this._onSettings = onSettings;
     this._onQuit = onQuit;
+    this._onProfile = onProfile;
+    this._onShop = onShop;
   }
 
   toggle() {
@@ -104,6 +106,18 @@ export class PauseMenu {
     this._saveStatus = document.createElement('div');
     this._saveStatus.style.cssText = 'color: #88ff88; font-size: 0.85rem; height: 20px; margin-top: -5px;';
     btnContainer.appendChild(this._saveStatus);
+
+    // Profile
+    btnContainer.appendChild(this._createButton('Profile [P]', () => {
+      this.hide();
+      if (this._onProfile) this._onProfile();
+    }));
+
+    // Shop
+    btnContainer.appendChild(this._createButton('Shop [B]', () => {
+      this.hide();
+      if (this._onShop) this._onShop();
+    }));
 
     // Settings
     btnContainer.appendChild(this._createButton('Settings', () => {
