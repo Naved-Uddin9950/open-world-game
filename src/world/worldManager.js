@@ -2,7 +2,7 @@
 // worldManager.js — Optimized chunk streaming
 // ============================================================
 import * as THREE from "three";
-import { ANIMAL_SIZE, CHUNK_SIZE } from "../utils/constants.js";
+import { CHUNK_SIZE } from "../utils/constants.js";
 import { ChunkLoader } from "./chunkLoader.js";
 import { ForestManager } from "./vegetation/forestManager.js";
 import { AnimalManager } from "./animals/animalManager.js";
@@ -26,15 +26,8 @@ export class WorldManager {
       assetLoader,
       seed,
     );
-    // Apply a very small scale override for animals to correct oversized models.
-    try {
-      this.animals.setAnimalScale("cow", ANIMAL_SIZE.cow);
-      this.animals.setAnimalScale("chicken", ANIMAL_SIZE.chicken);
-      this.animals.setAnimalScale("deer", ANIMAL_SIZE.deer);
-      this.animals.setAnimalScale("wolf", ANIMAL_SIZE.wolf);
-    } catch (e) {
-      console.warn("[WorldManager] failed to apply animal scale override", e);
-    }
+    // Procedural animals are already correctly scaled via _animalScaleFor()
+    // No scale overrides needed.
     this._player = player; // FirstPersonController instance (optional)
     this.activeChunks = new Map();
     this._lastChunkX = null;

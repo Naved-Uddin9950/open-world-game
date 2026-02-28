@@ -130,7 +130,7 @@ export const ANIMAL_SIZE = {
   deer: 0.2,
   wolf: 0.01,
 };
-export const ANIMAL_MAX_PER_CHUNK = 24;
+export const ANIMAL_MAX_PER_CHUNK = 6;
 export const ANIMAL_SPACING = 6; // sampling spacing for placement jitter
 // ── AI / Animal behavior constants ─────────────────────────────────
 export const WOLF_DETECTION_RADIUS = 40; // how far wolves can detect targets
