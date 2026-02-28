@@ -106,6 +106,7 @@ class Engine {
         this.player.setEscapeCallback(() => {
             this._handleEscape();
         });
+        this._lastEscapeTime = 0;
 
         // ── UI ──────────────────────────────────────────────
         this.mainMenu = new MainMenu();
@@ -214,6 +215,11 @@ class Engine {
     _handleEscape() {
         if (this._gameOver) return;
         if (this.mainMenu.isVisible()) return;
+
+        // Debounce: ESC may fire from both keydown and pointerlockchange
+        const now = Date.now();
+        if (now - this._lastEscapeTime < 300) return;
+        this._lastEscapeTime = now;
 
         if (this.pauseMenu.isVisible()) {
             this._resumeGame();

@@ -335,7 +335,7 @@ export class AnimalBrain {
       update(dt) {
         self._attackTimer -= dt;
         const target = self.memory.currentTarget;
-        if (!target || !target.mesh) {
+        if (!target || (!target.mesh && target.type !== 'player')) {
           self.fsm.unlock();
           self.fsm.transition(STATES.WANDER);
           return;

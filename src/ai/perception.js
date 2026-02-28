@@ -74,6 +74,11 @@ export class Perception {
         if (this.predators.includes('player')) {
           this.threats.push(entity);
         }
+
+        // Player can also be prey (e.g. for wolves)
+        if (this.prey.includes('player')) {
+          this.food.push(entity);
+        }
       }
     }
 

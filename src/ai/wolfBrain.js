@@ -69,7 +69,7 @@ export class WolfBrain extends AnimalBrain {
       hunger: 0.4,  // start moderately hungry
       energy: 0.8,
       predators: [],           // wolves fear nothing normally
-      prey: ['deer', 'chicken', 'cow'],  // hunt these (NOT player by default)
+      prey: ['deer', 'chicken', 'cow', 'player'],  // hunt these (player only when starving)
       same: ['wolf'],
       homeRadius: 60,
       minStopDistance: WOLF_ATTACK_RANGE,
@@ -98,6 +98,17 @@ export class WolfBrain extends AnimalBrain {
     if (this.health < 0.25 && this.memory.lastAttackedBy && this.memory.lastAttackedTime < 5) {
       if (this.memory.lastThreatPos) {
         return STATES.FLEE;
+      }
+    }
+
+    // ── RULE 1b: Retaliate when attacked by player (if health > 0.25) ──
+    if (this.memory.lastAttackedBy && this.memory.lastAttackedTime < 3 && this.health > 0.25) {
+      if (p.playerEntity && p.playerDistance <= this.attackRange) {
+        this.memory.currentTarget = p.playerEntity;
+        return STATES.ATTACK;
+      } else if (p.playerEntity && p.playerDistance <= this.perception.visionRange) {
+        this.memory.currentTarget = p.playerEntity;
+        return STATES.CHASE;
       }
     }
 

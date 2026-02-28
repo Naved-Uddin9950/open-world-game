@@ -94,7 +94,15 @@ export class FirstPersonController {
   }
 
   _onPointerLockChange() {
+    const wasLocked = this._isLocked;
     this._isLocked = document.pointerLockElement === this.domElement;
+
+    // If pointer lock was lost while alive, fire escape callback.
+    // In Chrome, ESC to exit pointer lock does NOT fire a keydown event,
+    // so we must detect it here.
+    if (wasLocked && !this._isLocked && !this.isDead) {
+      if (this._onEscape) this._onEscape();
+    }
   }
 
   /** Mouse look. */
