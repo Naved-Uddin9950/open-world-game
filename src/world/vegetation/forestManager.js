@@ -2,35 +2,23 @@
 // forestManager.js — Vegetation orchestrator per chunk
 // ============================================================
 import { SimplexNoise } from '../../utils/noise.js';
-import { TerrainGenerator } from '../terrain/terrainGenerator.js';
+import { TerrainGenerator, WATER_LEVEL } from '../terrain/terrainGenerator.js';
+import { BiomeSystem } from '../terrain/biomeSystem.js';
 import { TreeSystem } from './treeSystem.js';
 import { GrassSystem } from './grassSystem.js';
 import { RockSystem } from './rockSystem.js';
 import {
     CHUNK_SIZE,
     TERRAIN_HEIGHT_SCALE,
-    BIOME_GRASS_MAX,
-    BIOME_DIRT_MAX,
-    BIOME_ROCK_MAX,
-    TREE_DENSITY_GRASS,
-    TREE_DENSITY_DIRT,
-    TREE_DENSITY_ROCK,
     TREE_SPACING,
     TREE_MAX_PER_CHUNK,
-    TREE_MIN_SCALE,
-    TREE_MAX_SCALE,
     TREE_MIN_HEIGHT_FACTOR,
     TREE_MAX_HEIGHT_FACTOR,
     TREE_SLOPE_MAX,
-    GRASS_DENSITY_GRASS,
-    GRASS_DENSITY_DIRT,
     GRASS_SPACING,
     GRASS_MAX_PER_CHUNK,
     GRASS_HEIGHT_MIN,
     GRASS_HEIGHT_MAX,
-    ROCK_DENSITY_GRASS,
-    ROCK_DENSITY_DIRT,
-    ROCK_DENSITY_ROCK,
     ROCK_SPACING,
     ROCK_BOULDER_SCALE,
     ROCK_PEBBLE_SCALE,
@@ -46,6 +34,8 @@ export class ForestManager {
     constructor(scene, terrainGen, seed = 42) {
         this.scene = scene;
         this._terrain = terrainGen;
+        /** @type {BiomeSystem} biome system from the terrain generator */
+        this._biome = terrainGen.biome;
         this._noise = new SimplexNoise(seed * 3.141);
 
         this._treeSystem = new TreeSystem();
@@ -141,35 +131,20 @@ export class ForestManager {
     // ── Placement sampling ──────────────────────────────────
 
     /**
-     * Get biome density factor and zone for a normalised height.
-     * @param {number} h normalised [0,1]
-     * @returns {{zone:string, treeDensity:number, grassDensity:number, rockDensity:number}}
+     * Get vegetation density from the biome system.
+     * @param {number} wx world X
+     * @param {number} wz world Z
+     * @param {number} elev normalised elevation [0,1]
+     * @returns {{treeDensity:number, grassDensity:number, rockDensity:number}}
      */
-    _getBiomeDensity(h) {
-        if (h < BIOME_GRASS_MAX) {
-            return {
-                zone: 'grass',
-                treeDensity: TREE_DENSITY_GRASS,
-                grassDensity: GRASS_DENSITY_GRASS,
-                rockDensity: ROCK_DENSITY_GRASS,
-            };
-        } else if (h < BIOME_DIRT_MAX) {
-            return {
-                zone: 'dirt',
-                treeDensity: TREE_DENSITY_DIRT,
-                grassDensity: GRASS_DENSITY_DIRT,
-                rockDensity: ROCK_DENSITY_DIRT,
-            };
-        } else if (h < BIOME_ROCK_MAX) {
-            return {
-                zone: 'rock',
-                treeDensity: TREE_DENSITY_ROCK,
-                grassDensity: 0,
-                rockDensity: ROCK_DENSITY_ROCK,
-            };
-        } else {
-            return { zone: 'snow', treeDensity: 0, grassDensity: 0, rockDensity: 0 };
-        }
+    _getBiomeDensity(wx, wz, elev) {
+        const biomeId = this._biome.getBiome(wx, wz, elev);
+        const veg = this._biome.getVegetationParams(biomeId);
+        return {
+            treeDensity: veg.treeDensity,
+            grassDensity: veg.grassDensity,
+            rockDensity: veg.rockDensity,
+        };
     }
 
     /**
@@ -196,9 +171,11 @@ export class ForestManager {
                 const slope = this._terrain.getSlopeAt(worldX, worldZ);
                 const normH = Math.max(0, height) / TERRAIN_HEIGHT_SCALE;
 
+                // Skip water, steep slopes
+                if (normH < WATER_LEVEL + 0.02) continue;
                 if (slope > TREE_SLOPE_MAX) continue;
 
-                const { treeDensity } = this._getBiomeDensity(normH);
+                const { treeDensity } = this._getBiomeDensity(worldX, worldZ, normH);
                 const roll = this._hash(worldX, worldZ, 300);
 
                 if (roll < treeDensity) {
@@ -242,7 +219,10 @@ export class ForestManager {
                 const height = this._terrain.getHeightAt(worldX, worldZ);
                 const normH = Math.max(0, height) / TERRAIN_HEIGHT_SCALE;
 
-                const { grassDensity } = this._getBiomeDensity(normH);
+                // Skip water areas
+                if (normH < WATER_LEVEL + 0.02) continue;
+
+                const { grassDensity } = this._getBiomeDensity(worldX, worldZ, normH);
                 const roll = this._hash(worldX, worldZ, 900);
 
                 if (roll < grassDensity) {
@@ -279,7 +259,10 @@ export class ForestManager {
                 const height = this._terrain.getHeightAt(worldX, worldZ);
                 const normH = Math.max(0, height) / TERRAIN_HEIGHT_SCALE;
 
-                const { rockDensity } = this._getBiomeDensity(normH);
+                // Skip water areas
+                if (normH < WATER_LEVEL + 0.01) continue;
+
+                const { rockDensity } = this._getBiomeDensity(worldX, worldZ, normH);
                 const roll = this._hash(worldX, worldZ, 1400);
 
                 if (roll < rockDensity) {

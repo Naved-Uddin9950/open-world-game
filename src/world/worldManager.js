@@ -6,6 +6,7 @@ import { ANIMAL_SIZE, CHUNK_SIZE } from "../utils/constants.js";
 import { ChunkLoader } from "./chunkLoader.js";
 import { ForestManager } from "./vegetation/forestManager.js";
 import { AnimalManager } from "./animals/animalManager.js";
+import { WaterSystem } from "./waterSystem.js";
 
 export class WorldManager {
   /**
@@ -18,6 +19,7 @@ export class WorldManager {
     this.scene = scene;
     this.chunkLoader = new ChunkLoader(seed);
     this.forest = new ForestManager(scene, this.chunkLoader.generator, seed);
+    this.water = new WaterSystem();
     this.animals = new AnimalManager(
       scene,
       this.chunkLoader.generator,
@@ -92,6 +94,11 @@ export class WorldManager {
     const lod = this.chunkLoader.createChunk(cx, cz);
     this.scene.add(lod);
     this.activeChunks.set(key, lod);
+
+    // Water plane for this chunk
+    const waterMesh = this.water.createForChunk(cx, cz);
+    if (waterMesh) this.scene.add(waterMesh);
+
     // Load vegetation for this chunk and register any colliders with the player
     const veg = this.forest.loadChunkVegetation(cx, cz);
     // Load animals for this chunk
@@ -133,6 +140,11 @@ export class WorldManager {
     this.chunkLoader.disposeChunk(chunkObj);
     this.activeChunks.delete(key);
     const [cx, cz] = key.split(",").map(Number);
+
+    // Remove water plane
+    const waterMesh = this.water.removeForChunk(cx, cz);
+    if (waterMesh) this.scene.remove(waterMesh);
+
     // Unload vegetation and unregister colliders from player
     const veg = this.forest.unloadChunkVegetation(cx, cz);
     // Unload animals
@@ -177,6 +189,7 @@ export class WorldManager {
     }
     this.activeChunks.clear();
     this.forest.dispose();
+    this.water.dispose();
     this.animals.dispose();
   }
 }

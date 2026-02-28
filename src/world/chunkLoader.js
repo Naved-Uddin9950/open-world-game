@@ -3,7 +3,6 @@
 // ============================================================
 import { TerrainGenerator } from './terrain/terrainGenerator.js';
 import { TerrainChunk } from './terrain/terrainChunk.js';
-import { BiomeSystem } from './terrain/biomeSystem.js';
 
 export class ChunkLoader {
     /**
@@ -11,7 +10,8 @@ export class ChunkLoader {
      */
     constructor(seed = 42) {
         this.generator = new TerrainGenerator(seed);
-        this.biome = new BiomeSystem();
+        /** BiomeSystem lives inside the generator for consistency */
+        this.biome = this.generator.biome;
         this._builder = new TerrainChunk(this.generator, this.biome);
     }
 

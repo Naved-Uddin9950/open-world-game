@@ -7,8 +7,9 @@ import {
     TERRAIN_SEG_HIGH,
     TERRAIN_SEG_MED,
     TERRAIN_SEG_LOW,
+    TERRAIN_HEIGHT_SCALE,
 } from '../../utils/constants.js';
-import { TerrainGenerator } from './terrainGenerator.js';
+import { TerrainGenerator, WATER_LEVEL_WORLD } from './terrainGenerator.js';
 import { BiomeSystem } from './biomeSystem.js';
 
 // Shared material across all terrain chunks — uses vertex colours
@@ -87,16 +88,14 @@ export class TerrainChunk {
                 // Set Y position from heightmap
                 positions.setY(idx, h);
 
-                // Calculate slope for biome colouring
+                // World coordinates for biome colour lookup
                 const worldX = originX + ix * step;
                 const worldZ = originZ + iz * step;
                 const slope = this._generator.getSlopeAt(worldX, worldZ, step);
+                const elev = h / TERRAIN_HEIGHT_SCALE; // normalised 0-1
 
-                // Get biome colour
-                const colour = this._biome.getColor(h, slope);
-                colors[idx * 3] = colour.r;
-                colors[idx * 3 + 1] = colour.g;
-                colors[idx * 3 + 2] = colour.b;
+                // Write colour directly into array (avoids Color allocation)
+                this._biome.writeColor(worldX, worldZ, h, slope, elev, colors, idx * 3);
             }
         }
 

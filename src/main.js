@@ -28,6 +28,7 @@ import { SaveSystem } from './systems/saveSystem.js';
 import { MainMenu } from './ui/mainMenu.js';
 import { PauseMenu } from './ui/pauseMenu.js';
 import { GameOverScreen } from './ui/gameOverScreen.js';
+import { SettingsPanel } from './ui/settingsPanel.js';
 
 // ═══════════════════════════════════════════════════════════
 // Engine initialisation
@@ -112,6 +113,24 @@ class Engine {
         this.mainMenu = new MainMenu();
         this.pauseMenu = new PauseMenu();
         this.gameOverScreen = new GameOverScreen();
+        this.settingsPanel = new SettingsPanel();
+
+        // ── Settings panel callbacks ────────────────────────
+        this.settingsPanel.setCallbacks({
+            onChange: (s) => this._applySettings(s),
+            onClose: () => {
+                // Return to whichever menu was open before
+                if (this._gameStarted) {
+                    this.pauseMenu.show();
+                } else {
+                    this.mainMenu.show();
+                }
+            },
+        });
+
+        // ── Initial fog ─────────────────────────────────────
+        const initSettings = this.settingsPanel.current;
+        this.gameScene.raw.fog = new THREE.Fog(0x87ceeb, initSettings.fogNear, initSettings.fogFar);
 
         this._setupUI();
 
@@ -128,7 +147,7 @@ class Engine {
         this.mainMenu.setCallbacks({
             onContinue: () => this._continueGame(),
             onNewGame: () => this._newGame(),
-            onSettings: () => {}, // placeholder
+            onSettings: () => { this.mainMenu.hide(); this.settingsPanel.show(); },
         });
         this.mainMenu.setCanContinue(hasSave);
 
@@ -136,7 +155,7 @@ class Engine {
         this.pauseMenu.setCallbacks({
             onResume: () => this._resumeGame(),
             onSave: () => this._saveGame(),
-            onSettings: () => {},
+            onSettings: () => { this.pauseMenu.hide(); this.settingsPanel.show(); },
             onQuit: () => this._quitToMenu(),
         });
 
@@ -221,6 +240,17 @@ class Engine {
         if (now - this._lastEscapeTime < 300) return;
         this._lastEscapeTime = now;
 
+        // Close settings panel first
+        if (this.settingsPanel.isVisible()) {
+            this.settingsPanel.hide();
+            if (this._gameStarted) {
+                this.pauseMenu.show();
+            } else {
+                this.mainMenu.show();
+            }
+            return;
+        }
+
         if (this.pauseMenu.isVisible()) {
             this._resumeGame();
         } else {
@@ -241,12 +271,30 @@ class Engine {
         }, 500);
     }
 
+    /** Apply graphics settings from the settings panel. */
+    _applySettings(s) {
+        // Renderer
+        this.renderer.setResolutionScale(s.resolution);
+        this.renderer.renderer.shadowMap.enabled = s.shadows;
+
+        // Fog
+        const scene = this.gameScene.raw;
+        if (scene.fog) {
+            scene.fog.near = s.fogNear;
+            scene.fog.far = s.fogFar;
+        } else {
+            scene.fog = new THREE.Fog(0x87ceeb, s.fogNear, s.fogFar);
+        }
+
+        // World render distance
+        this.worldManager.setRenderDistance(s.renderDist);
+    }
+
     /** Fixed-step update. */
     _update(dt) {
-        // Auto quality adjustment (always runs)
-        this.autoQuality.update(dt);
-        const quality = this.autoQuality.getSettings();
-        this.worldManager.setRenderDistance(quality.renderDist);
+        // When user has configured settings, skip auto quality
+        const s = this.settingsPanel.current;
+        this.worldManager.setRenderDistance(s.renderDist);
 
         // Don't update game logic when paused or in menu
         if (this._paused || !this._gameStarted) return;

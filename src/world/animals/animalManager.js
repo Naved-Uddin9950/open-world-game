@@ -9,7 +9,9 @@ import {
     ANIMAL_MAX_PER_CHUNK,
     ANIMAL_SPACING,
     CHUNK_SIZE,
+    TERRAIN_HEIGHT_SCALE,
 } from '../../utils/constants.js';
+import { WATER_LEVEL } from '../terrain/terrainGenerator.js';
 
 export class AnimalManager {
     /**
@@ -205,7 +207,9 @@ export class AnimalManager {
                 const worldX = originX + rx;
                 const worldZ = originZ + rz;
                 const height = this._terrain.getHeightAt(worldX, worldZ);
-                // Avoid very steep slopes (simple slope check)
+                // Avoid water and very steep slopes
+                const normH = Math.max(0, height) / TERRAIN_HEIGHT_SCALE;
+                if (normH < WATER_LEVEL + 0.02) continue;
                 const slope = this._terrain.getSlopeAt ? this._terrain.getSlopeAt(worldX, worldZ) : 0;
                 if (slope > 0.6) continue;
 
