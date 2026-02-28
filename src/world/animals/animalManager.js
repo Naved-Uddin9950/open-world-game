@@ -3,6 +3,7 @@
 // ============================================================
 import * as THREE from 'three';
 import { SimplexNoise } from '../../utils/noise.js';
+import { createProceduralAnimal } from './proceduralAnimal.js';
 import {
     ANIMAL_MEAN_COUNTS,
     ANIMAL_MAX_PER_CHUNK,
@@ -50,19 +51,9 @@ export class AnimalManager {
         const colliders = [];
 
         for (const p of placements) {
-            let mesh = null;
-            const model = this._models[p.type];
-            if (model) {
-                try {
-                    // deep clone (may include nested meshes)
-                    mesh = model.clone(true);
-                } catch (e) {
-                    mesh = null;
-                }
-            }
             const finalScale = this.getAnimalScale(p.type) * p.scale;
-            if (!mesh) mesh = this._createAnimalMesh(p.type, finalScale);
-            else mesh.scale.set(finalScale, finalScale, finalScale);
+            // Use procedural animal meshes instead of GLTF models or box placeholders
+            const mesh = createProceduralAnimal(p.type, finalScale);
             mesh.position.set(p.x, p.y + 0.05, p.z);
             mesh.rotation.y = p.rotation;
             mesh.userData = { type: p.type };

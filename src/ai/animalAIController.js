@@ -6,27 +6,15 @@ import { WolfBrain } from './wolfBrain.js';
 import { DeerBrain } from './deerBrain.js';
 import { CowBrain } from './cowBrain.js';
 import { ChickenBrain } from './chickenBrain.js';
+import { animateProceduralAnimal, deathAnimation } from '../world/animals/proceduralAnimal.js';
 import {
   ANIMAL_DAY_ACTIVITY,
 } from '../utils/constants.js';
 
 /**
  * AnimalAIController — manages all animal brains and updates them each frame.
- * 
- * Usage:
- *   const ai = new AnimalAIController(scene, worldManager, {
- *     dayProvider: () => timeSystem.isDay(),
- *     playerRef: firstPersonController,
- *   });
- *   // In game loop:
- *   ai.update(dt);
  */
 export class AnimalAIController {
-  /**
-   * @param {THREE.Scene} scene
-   * @param {object} worldManager
-   * @param {object} options
-   */
   constructor(scene, worldManager, options = {}) {
     this.scene = scene;
     this.world = worldManager;
@@ -34,23 +22,13 @@ export class AnimalAIController {
     this.dayProvider = options.dayProvider || (() => true);
     this.playerRef = options.playerRef || null;
 
-    // Brain instances per animal (mesh.uuid -> Brain)
     this._brains = new Map();
-
-    // Entity cache for perception (rebuilt each frame)
     this._entityCache = [];
-
-    // Health bar sprites
     this._healthBars = new Map();
-
     this._time = 0;
+    this._camWorldPos = new THREE.Vector3();
   }
 
-  /**
-   * Get or create a brain for an animal mesh.
-   * @param {THREE.Mesh} mesh
-   * @returns {AnimalBrain|null}
-   */
   _getOrCreateBrain(mesh) {
     if (this._brains.has(mesh.uuid)) {
       return this._brains.get(mesh.uuid);
@@ -60,34 +38,22 @@ export class AnimalAIController {
     let brain = null;
 
     switch (type) {
-      case 'wolf':
-        brain = new WolfBrain(mesh);
-        break;
-      case 'deer':
-        brain = new DeerBrain(mesh);
-        break;
-      case 'cow':
-        brain = new CowBrain(mesh);
-        break;
-      case 'chicken':
-        brain = new ChickenBrain(mesh);
-        break;
-      default:
-        return null;
+      case 'wolf': brain = new WolfBrain(mesh); break;
+      case 'deer': brain = new DeerBrain(mesh); break;
+      case 'cow': brain = new CowBrain(mesh); break;
+      case 'chicken': brain = new ChickenBrain(mesh); break;
+      default: return null;
     }
+
+    // Wire player ref so wolf can damage player
+    brain._playerController = this.playerRef;
 
     this._brains.set(mesh.uuid, brain);
     mesh.userData._brain = brain;
-
-    // Create health/stamina bar
     this._createHealthBar(mesh, brain);
-
     return brain;
   }
 
-  /**
-   * Collect all animal meshes from the scene.
-   */
   _collectAnimals() {
     const animals = [];
     for (const child of this.scene.children) {
@@ -101,14 +67,11 @@ export class AnimalAIController {
     return animals;
   }
 
-  /**
-   * Build entity list for perception system.
-   */
   _buildEntityCache(animals) {
     this._entityCache = [];
     for (const mesh of animals) {
       this._entityCache.push({
-        mesh: mesh,
+        mesh,
         type: mesh.userData.type,
         position: mesh.position,
         userData: mesh.userData,
@@ -116,57 +79,56 @@ export class AnimalAIController {
     }
   }
 
-  /**
-   * Main update — called every fixed-step.
-   * @param {number} dt
-   */
   update(dt) {
     this._time += dt;
 
     const animals = this._collectAnimals();
     const playerPos = this.player ? this.player.player.position : null;
 
-    // Build entity cache for perception
+    // Cache camera world position for health bar billboard
+    if (this.playerRef && this.playerRef.camera) {
+      this.playerRef.camera.getWorldPosition(this._camWorldPos);
+    } else if (playerPos) {
+      this._camWorldPos.copy(playerPos);
+    }
+
     this._buildEntityCache(animals);
 
-    // Day/night activity multiplier
     const dayMult = this.dayProvider() ? ANIMAL_DAY_ACTIVITY.day : ANIMAL_DAY_ACTIVITY.night;
 
-    // Update each animal brain
     for (const mesh of animals) {
       const brain = this._getOrCreateBrain(mesh);
       if (!brain) continue;
 
-      // Skip dead animals
       if (brain.isDead) {
-        this._handleDeath(mesh, brain);
+        this._handleDeath(mesh, brain, dt);
         continue;
       }
 
-      // Apply day/night multiplier to speeds
-      brain.baseSpeed = brain.baseSpeed; // base stays constant; multiplier applied in movement
-      
-      // Update the brain (perception, NN, FSM, movement)
       brain.update(dt, this._entityCache, playerPos);
-
-      // Align to ground after movement
       this._alignToGround(mesh);
 
-      // Update health bar
+      // Animate procedural mesh
+      if (mesh.isGroup || mesh.children.length > 0) {
+        animateProceduralAnimal(mesh, this._time, brain.currentSpeed || 0);
+      }
+
       this._updateHealthBar(mesh, brain);
     }
 
-    // Clean up brains for removed animals
     this._cleanupBrains(animals);
   }
 
-  /**
-   * Handle animal death.
-   */
-  _handleDeath(mesh, brain) {
-    // Tilt the mesh (death animation)
-    mesh.rotation.z = Math.PI / 2;
-    mesh.rotation.x = 0;
+  _handleDeath(mesh, brain, dt) {
+    if (!mesh.userData._deathTimer) {
+      mesh.userData._deathTimer = 0;
+    }
+    mesh.userData._deathTimer += dt;
+
+    const progress = Math.min(mesh.userData._deathTimer / 3.0, 1.0); // 3 second death
+
+    // Use procedural death animation
+    deathAnimation(mesh, progress);
 
     // Remove health bar
     const bar = this._healthBars.get(mesh.uuid);
@@ -175,103 +137,101 @@ export class AnimalAIController {
       this._healthBars.delete(mesh.uuid);
     }
 
-    // Fade out and remove after delay
-    if (!mesh.userData._deathTimer) {
-      mesh.userData._deathTimer = 0;
-    }
-    mesh.userData._deathTimer += 0.016;
-    if (mesh.userData._deathTimer > 5) {
-      // Remove from scene
+    // Remove after animation completes
+    if (mesh.userData._deathTimer > 4.0) {
       if (mesh.parent) mesh.parent.remove(mesh);
       this._brains.delete(mesh.uuid);
     }
   }
 
-  /**
-   * Align mesh to ground height.
-   */
   _alignToGround(mesh) {
     if (!this.world || typeof this.world.getHeightAt !== 'function') return;
-    const x = mesh.position.x;
-    const z = mesh.position.z;
-    const h = this.world.getHeightAt(x, z);
+    const h = this.world.getHeightAt(mesh.position.x, mesh.position.z);
     mesh.position.y = h + 0.05;
-
-    // Update collider
-    if (mesh.userData && mesh.userData.collider) {
-      try {
-        const offsetY = mesh.userData.colliderOffsetY || 0.05;
-        mesh.userData.collider.position.set(x, h + offsetY, z);
-        if (typeof mesh.userData.collider.updateMatrixWorld === 'function') {
-          mesh.userData.collider.updateMatrixWorld(true);
-        }
-      } catch (e) { /* ignore */ }
-    }
   }
 
-  /**
-   * Create a health/stamina bar above an animal.
-   */
   _createHealthBar(mesh, brain) {
     const barGroup = new THREE.Group();
     barGroup.name = 'healthBar';
+    barGroup.renderOrder = 999;
 
-    // Health bar background (red)
-    const bgGeo = new THREE.PlaneGeometry(1.0, 0.08);
-    const bgMat = new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.7 });
+    // Health bar background
+    const bgGeo = new THREE.PlaneGeometry(1.0, 0.1);
+    const bgMat = new THREE.MeshBasicMaterial({
+      color: 0x333333, side: THREE.DoubleSide,
+      depthTest: false, depthWrite: false, transparent: true, opacity: 0.7,
+    });
     const bg = new THREE.Mesh(bgGeo, bgMat);
     bg.name = 'hpBg';
+    bg.renderOrder = 999;
     barGroup.add(bg);
 
-    // Health bar fill (green)
-    const fillGeo = new THREE.PlaneGeometry(1.0, 0.08);
-    const fillMat = new THREE.MeshBasicMaterial({ color: 0x22cc22, side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.9 });
+    // Health fill
+    const fillGeo = new THREE.PlaneGeometry(1.0, 0.1);
+    const fillMat = new THREE.MeshBasicMaterial({
+      color: 0x22cc22, side: THREE.DoubleSide,
+      depthTest: false, depthWrite: false, transparent: true, opacity: 0.9,
+    });
     const fill = new THREE.Mesh(fillGeo, fillMat);
     fill.name = 'hpFill';
+    fill.renderOrder = 1000;
     barGroup.add(fill);
 
     // Stamina bar background
-    const stBgGeo = new THREE.PlaneGeometry(1.0, 0.05);
-    const stBgMat = new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.6 });
+    const stBgGeo = new THREE.PlaneGeometry(1.0, 0.06);
+    const stBgMat = new THREE.MeshBasicMaterial({
+      color: 0x333333, side: THREE.DoubleSide,
+      depthTest: false, depthWrite: false, transparent: true, opacity: 0.6,
+    });
     const stBg = new THREE.Mesh(stBgGeo, stBgMat);
-    stBg.position.y = -0.09;
+    stBg.position.y = -0.11;
     stBg.name = 'stBg';
+    stBg.renderOrder = 999;
     barGroup.add(stBg);
 
-    // Stamina bar fill (yellow)
-    const stFillGeo = new THREE.PlaneGeometry(1.0, 0.05);
-    const stFillMat = new THREE.MeshBasicMaterial({ color: 0xffcc00, side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.8 });
+    // Stamina fill
+    const stFillGeo = new THREE.PlaneGeometry(1.0, 0.06);
+    const stFillMat = new THREE.MeshBasicMaterial({
+      color: 0xffcc00, side: THREE.DoubleSide,
+      depthTest: false, depthWrite: false, transparent: true, opacity: 0.8,
+    });
     const stFill = new THREE.Mesh(stFillGeo, stFillMat);
-    stFill.position.y = -0.09;
+    stFill.position.y = -0.11;
     stFill.name = 'stFill';
+    stFill.renderOrder = 1000;
     barGroup.add(stFill);
 
-    // Position above animal (height varies by type)
+    // Position bar above animal head
     let barHeight = 1.5;
     switch (brain.type) {
-      case 'cow': barHeight = 2.0; break;
-      case 'deer': barHeight = 1.8; break;
-      case 'wolf': barHeight = 1.2; break;
-      case 'chicken': barHeight = 0.6; break;
+      case 'cow': barHeight = 2.2; break;
+      case 'deer': barHeight = 2.0; break;
+      case 'wolf': barHeight = 1.3; break;
+      case 'chicken': barHeight = 0.8; break;
     }
     barGroup.position.y = barHeight;
-    barGroup.renderOrder = 999;
 
     mesh.add(barGroup);
     this._healthBars.set(mesh.uuid, barGroup);
   }
 
-  /**
-   * Update health bar visual.
-   */
   _updateHealthBar(mesh, brain) {
     const barGroup = this._healthBars.get(mesh.uuid);
     if (!barGroup) return;
 
-    // Make bar face camera
-    if (this.player && this.player.camera) {
-      barGroup.lookAt(this.player.camera.position || this.player.player.position);
-    }
+    // Billboard: make bar face camera using world position
+    const meshWorldPos = new THREE.Vector3();
+    mesh.getWorldPosition(meshWorldPos);
+    const barWorldPos = new THREE.Vector3();
+    barWorldPos.copy(meshWorldPos);
+    barWorldPos.y += barGroup.position.y;
+
+    // Look at camera in world space, then convert to local
+    barGroup.lookAt(
+      this._camWorldPos.x - meshWorldPos.x + barGroup.position.x,
+      this._camWorldPos.y - meshWorldPos.y + barGroup.position.y,
+      this._camWorldPos.z - meshWorldPos.z + barGroup.position.z,
+    );
 
     // Health fill
     const hpRatio = brain.health / brain.maxHealth;
@@ -279,7 +239,6 @@ export class AnimalAIController {
     if (hpFill) {
       hpFill.scale.x = Math.max(0.01, hpRatio);
       hpFill.position.x = (hpRatio - 1) * 0.5;
-      // Color: green → yellow → red
       if (hpRatio > 0.6) hpFill.material.color.setHex(0x22cc22);
       else if (hpRatio > 0.3) hpFill.material.color.setHex(0xcccc22);
       else hpFill.material.color.setHex(0xcc2222);
@@ -293,16 +252,13 @@ export class AnimalAIController {
       stFill.position.x = (stRatio - 1) * 0.5;
     }
 
-    // Hide bars if full health and stamina
-    barGroup.visible = (hpRatio < 0.99 || stRatio < 0.95);
+    // Always show bars (removed hide when full, user wants them visible)
+    barGroup.visible = true;
   }
 
-  /**
-   * Clean up brains for animals that are no longer in the scene.
-   */
   _cleanupBrains(currentAnimals) {
     const currentIds = new Set(currentAnimals.map(m => m.uuid));
-    for (const [uuid, brain] of this._brains) {
+    for (const [uuid] of this._brains) {
       if (!currentIds.has(uuid)) {
         this._brains.delete(uuid);
         this._healthBars.delete(uuid);
@@ -310,29 +266,24 @@ export class AnimalAIController {
     }
   }
 
-  /**
-   * Called when the player attacks. Damages nearby animals.
-   * @param {THREE.Vector3} playerPos
-   * @param {THREE.Vector3} playerForward  Direction player is facing
-   * @param {number} attackRange
-   * @param {number} attackDamage
-   */
   playerAttack(playerPos, playerForward, attackRange = 3.0, attackDamage = 0.25) {
+    let hitAny = false;
     for (const [uuid, brain] of this._brains) {
       if (brain.isDead) continue;
       const dist = brain.position.distanceTo(playerPos);
       if (dist > attackRange) continue;
 
-      // Check if animal is roughly in front of player
       const toAnimal = new THREE.Vector3().subVectors(brain.position, playerPos).normalize();
       const dot = playerForward.dot(toAnimal);
-      if (dot < 0.3) continue; // must be within ~70° cone
+      if (dot < 0.3) continue;
 
       brain.takeDamage(attackDamage, {
         type: 'player',
         position: playerPos.clone(),
         mesh: { position: playerPos },
       });
+      hitAny = true;
     }
+    return hitAny;
   }
 }

@@ -6,6 +6,7 @@ import { MOUSE_SENSITIVITY, PLAYER_HEIGHT, PLAYER_SPEED, PLAYER_SPRINT_MULT } fr
 import { clamp } from "../utils/math.js";
 import { Movement } from "./movement.js";
 import { Collision } from "./collision.js";
+import { AttackAnimation } from "./attackAnimation.js";
 
 export class FirstPersonController {
   /**
@@ -52,6 +53,11 @@ export class FirstPersonController {
     this.attackRange = 3.0;
     this.attackDamage = 0.25;
     this._onAttack = null;  // callback set by Engine: (playerPos, forward, range, damage) => {}
+    this._attackAnim = new AttackAnimation(camera);
+
+    // ── Callbacks ───────────────────────────────────────
+    this._onDeath = null;     // called when player dies
+    this._onEscape = null;    // called when ESC pressed
 
     // ── HUD elements ────────────────────────────────────
     this._hudCreated = false;
@@ -140,6 +146,9 @@ export class FirstPersonController {
         break;
       case "Enter":
         this.isAttacking = true;
+        break;
+      case "Escape":
+        if (this._onEscape) this._onEscape();
         break;
     }
   }
@@ -262,9 +271,11 @@ export class FirstPersonController {
    * @param {number} amount
    */
   takeDamage(amount) {
+    if (this.isDead) return;
     this.health = Math.max(0, this.health - amount);
     if (this.health <= 0) {
       this.isDead = true;
+      if (this._onDeath) this._onDeath();
     }
     // Red flash effect
     const flash = document.createElement('div');
@@ -273,6 +284,12 @@ export class FirstPersonController {
     setTimeout(() => { flash.style.opacity = '0'; }, 50);
     setTimeout(() => { flash.remove(); }, 350);
   }
+
+  /**
+   * Set callbacks.
+   */
+  setDeathCallback(fn) { this._onDeath = fn; }
+  setEscapeCallback(fn) { this._onEscape = fn; }
 
   /**
    * Set the attack callback (called by Engine after AI controller is created).
@@ -326,6 +343,10 @@ export class FirstPersonController {
     this._attackTimer = Math.max(0, this._attackTimer - dt);
     if (this.isAttacking && this._attackTimer <= 0) {
       this._attackTimer = this.attackCooldown;
+
+      // Trigger swing animation
+      this._attackAnim.swing();
+
       // Get forward direction
       const forward = new THREE.Vector3(0, 0, -1);
       forward.applyQuaternion(this.camera.quaternion);
@@ -333,9 +354,13 @@ export class FirstPersonController {
       forward.normalize();
 
       if (this._onAttack) {
-        this._onAttack(this.player.position.clone(), forward, this.attackRange, this.attackDamage);
+        const hitResult = this._onAttack(this.player.position.clone(), forward, this.attackRange, this.attackDamage);
+        this._attackAnim.onHitResult(hitResult);
       }
     }
+
+    // Update attack animation
+    this._attackAnim.update(dt);
 
     // Ensure internal euler matches camera for look (movement uses camera directly)
     this._euler.setFromQuaternion(this.camera.quaternion);
@@ -468,6 +493,8 @@ export class FirstPersonController {
       "pointerlockchange",
       this._onPointerLockChange,
     );
+    // Remove attack animation
+    if (this._attackAnim) this._attackAnim.dispose();
     // Remove HUD
     const hud = document.getElementById('player-hud');
     if (hud) hud.remove();

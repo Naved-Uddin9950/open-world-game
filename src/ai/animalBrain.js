@@ -520,19 +520,20 @@ export class AnimalBrain {
    * Deal damage to a target entity.
    */
   _dealDamage(target) {
-    if (!target || !target.mesh || !target.mesh.userData) return;
+    if (!target) return;
 
-    // Access the target's brain to reduce health
-    const targetBrain = target.mesh.userData._brain;
-    if (targetBrain) {
-      targetBrain.takeDamage(this.attackDamage, this);
+    // If target is another animal with a brain
+    if (target.mesh && target.mesh.userData) {
+      const targetBrain = target.mesh.userData._brain;
+      if (targetBrain) {
+        targetBrain.takeDamage(this.attackDamage, this);
+      }
     }
 
-    // Also mark player damage if target is player
-    if (target.type === 'player' && target.mesh.userData._playerRef) {
-      const player = target.mesh.userData._playerRef;
-      if (player.takeDamage) {
-        player.takeDamage(this.attackDamage);
+    // If target is the player, use the _playerController ref set by AIController
+    if (target.type === 'player' && this._playerController) {
+      if (this._playerController.takeDamage) {
+        this._playerController.takeDamage(this.attackDamage);
       }
     }
 
