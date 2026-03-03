@@ -253,6 +253,41 @@ export class InventorySystem {
   // ── Shop actions ────────────────────────────────────────
 
   /**
+   * Add gold directly (used by mission/loot rewards).
+   * @param {number} amount
+   * @returns {number} New gold total
+   */
+  addGold(amount = 0) {
+    const v = Number(amount) || 0;
+    if (v <= 0) return this.gold;
+    this.gold += v;
+    this._notifyChange();
+    return this.gold;
+  }
+
+  /**
+   * Remove gold safely.
+   * @param {number} amount
+   * @returns {boolean}
+   */
+  removeGold(amount = 0) {
+    const v = Number(amount) || 0;
+    if (v <= 0) return true;
+    if (this.gold < v) return false;
+    this.gold -= v;
+    this._notifyChange();
+    return true;
+  }
+
+  /**
+   * Check if player has enough gold.
+   */
+  canAfford(amount = 0) {
+    const v = Number(amount) || 0;
+    return this.gold >= Math.max(0, v);
+  }
+
+  /**
    * Buy item from shop. Deducts gold.
    */
   buyItem(itemId, quantity = 1) {

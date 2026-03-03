@@ -3,11 +3,11 @@
 // ============================================================
 import * as THREE from 'three';
 import { SimplexNoise } from '../../utils/noise.js';
-import { createProceduralAnimal } from './proceduralAnimal.js';
+import { createCreatureMesh } from '../../entities/creatures/creatureFactory.js';
+import { CREATURES } from '../../entities/creatures/creatureDatabase.js';
+import { getZoneAtPosition } from '../worldConfig.js';
 import {
-    ANIMAL_MEAN_COUNTS,
     ANIMAL_MAX_PER_CHUNK,
-    ANIMAL_SPACING,
     CHUNK_SIZE,
     TERRAIN_HEIGHT_SCALE,
 } from '../../utils/constants.js';
@@ -46,12 +46,21 @@ export class AnimalManager {
         const colliders = [];
 
         for (const p of placements) {
-            const finalScale = this.getAnimalScale(p.type) * p.scale;
-            // Use procedural animal meshes instead of GLTF models or box placeholders
-            const mesh = createProceduralAnimal(p.type, finalScale);
+            const creatureDef = CREATURES[p.type] || CREATURES.slime;
+            const finalScale = this.getAnimalScale(p.type) * (p.scale || 1);
+            const mesh = createCreatureMesh(
+                creatureDef.visual.meshType,
+                creatureDef.visual,
+                p.level || creatureDef.baseLevel || 1,
+            );
+            if (finalScale !== 1) mesh.scale.multiplyScalar(finalScale);
             mesh.position.set(p.x, p.y + 0.05, p.z);
             mesh.rotation.y = p.rotation;
-            mesh.userData = { type: p.type };
+            mesh.userData = {
+                type: p.type,
+                level: p.level || creatureDef.baseLevel || 1,
+                creatureId: p.type,
+            };
             group.add(mesh);
 
             // Create a simple invisible collider approximating the mesh bounds.
@@ -155,36 +164,48 @@ export class AnimalManager {
         const originX = cx * CHUNK_SIZE;
         const originZ = cz * CHUNK_SIZE;
 
-        // For each animal type, deterministically pick a count based on noise
-        let total = 0;
-        for (const [type, mean] of Object.entries(ANIMAL_MEAN_COUNTS)) {
-            const roll = this._hash(cx, cz, type.length * 13);
-            // Allow variance around mean
-            const count = Math.floor(Math.max(0, roll * mean * 1.6));
-            for (let i = 0; i < count; i++) {
-                if (total >= ANIMAL_MAX_PER_CHUNK) break;
-                // place randomly within chunk using noise-derived offsets
-                const rx = this._hash(cx, cz, i * 31 + type.length) * CHUNK_SIZE;
-                const rz = this._hash(cx, cz, i * 47 + type.length) * CHUNK_SIZE;
-                const worldX = originX + rx;
-                const worldZ = originZ + rz;
-                const height = this._terrain.getHeightAt(worldX, worldZ);
-                // Avoid water and very steep slopes
-                const normH = Math.max(0, height) / TERRAIN_HEIGHT_SCALE;
-                if (normH < WATER_LEVEL + 0.02) continue;
-                const slope = this._terrain.getSlopeAt ? this._terrain.getSlopeAt(worldX, worldZ) : 0;
-                if (slope > 0.6) continue;
+        const centerX = originX + CHUNK_SIZE * 0.5;
+        const centerZ = originZ + CHUNK_SIZE * 0.5;
+        const zone = getZoneAtPosition(centerX, centerZ);
+        const pool = (zone && Array.isArray(zone.enemyTypes) && zone.enemyTypes.length > 0)
+            ? zone.enemyTypes.filter(id => CREATURES[id])
+            : ['slime', 'smallGoblin'];
 
-                placements.push({
-                    type,
-                    x: worldX,
-                    y: height,
-                    z: worldZ,
-                    rotation: this._hash(worldX, worldZ, i + 11) * Math.PI * 2,
-                    scale: this._animalScaleFor(type),
-                });
-                total++;
-            }
+        const levelMin = zone ? zone.levelRange[0] : 1;
+        const levelMax = zone ? zone.levelRange[1] : 10;
+
+        const spawnCount = Math.min(
+            ANIMAL_MAX_PER_CHUNK,
+            4 + Math.floor(this._hash(cx, cz, 97) * 8),
+        );
+
+        let total = 0;
+        for (let i = 0; i < spawnCount; i++) {
+            const rx = this._hash(cx, cz, i * 31 + 7) * CHUNK_SIZE;
+            const rz = this._hash(cx, cz, i * 47 + 13) * CHUNK_SIZE;
+            const worldX = originX + rx;
+            const worldZ = originZ + rz;
+            const height = this._terrain.getHeightAt(worldX, worldZ);
+
+            const normH = Math.max(0, height) / TERRAIN_HEIGHT_SCALE;
+            if (normH < WATER_LEVEL + 0.02) continue;
+            const slope = this._terrain.getSlopeAt ? this._terrain.getSlopeAt(worldX, worldZ) : 0;
+            if (slope > 0.6) continue;
+
+            const typeIdx = Math.floor(this._hash(cx, cz, i * 19 + 23) * pool.length);
+            const type = pool[Math.min(pool.length - 1, Math.max(0, typeIdx))] || 'slime';
+            const level = Math.round(levelMin + (levelMax - levelMin) * this._hash(cx, cz, i * 29 + 3));
+
+            placements.push({
+                type,
+                level,
+                x: worldX,
+                y: height,
+                z: worldZ,
+                rotation: this._hash(worldX, worldZ, i + 11) * Math.PI * 2,
+                scale: 1,
+            });
+            total++;
             if (total >= ANIMAL_MAX_PER_CHUNK) break;
         }
 
@@ -193,10 +214,23 @@ export class AnimalManager {
 
     _animalScaleFor(type) {
         switch (type) {
-            case 'cow': return 0.8;
-            case 'deer': return 0.8;
-            case 'wolf': return 0.85;
-            case 'chicken': return 0.55;
+            case 'slime': return 0.95;
+            case 'smallGoblin': return 0.9;
+            case 'goblin': return 1.0;
+            case 'goblinArcher': return 0.95;
+            case 'direWolf': return 1.0;
+            case 'forestGolem': return 1.0;
+            case 'orc': return 1.0;
+            case 'undeadKnight': return 1.0;
+            case 'wyvern': return 1.0;
+            case 'fireDrake': return 1.0;
+            case 'iceGolem': return 1.0;
+            case 'frostBear': return 1.0;
+            case 'sandGolem': return 1.0;
+            case 'scorpionKing': return 1.0;
+            case 'demonGeneral': return 1.0;
+            case 'iceDragon': return 1.0;
+            case 'ancientDragon': return 1.0;
             default: return 1.0;
         }
     }

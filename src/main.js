@@ -22,7 +22,7 @@ import { DayNightCycle } from './systems/dayNightCycle.js';
 import { LODSystem } from './systems/lodSystem.js';
 import { PerformanceMonitor } from './systems/performanceMonitor.js';
 import { AutoQualitySystem } from './systems/autoQualitySystem.js';
-import { AnimalAIController } from './ai/animalAIController.js';
+import { CreatureAIController } from './ai/creatureAIController.js';
 import { SaveSystem } from './systems/saveSystem.js';
 import { PlayerProfile } from './systems/playerProfile.js';
 import { SkillSystem, SKILLS } from './systems/skillSystem.js';
@@ -193,7 +193,7 @@ class Engine {
         });
 
         // ── AI controller ───────────────────────────────────
-        this.animalAI = new AnimalAIController(this.gameScene.raw, this.worldManager, {
+        this.animalAI = new CreatureAIController(this.gameScene.raw, this.worldManager, {
             dayProvider: () => this.dayNightCycle.isDay(),
             playerRef: this.player,
         });
@@ -1030,7 +1030,7 @@ class Engine {
         }
 
         // Rebind AI controller to the active world manager after mode switch
-        this.animalAI = new AnimalAIController(this.gameScene.raw, this.worldManager, {
+        this.animalAI = new CreatureAIController(this.gameScene.raw, this.worldManager, {
             dayProvider: () => this.dayNightCycle.isDay(),
             playerRef: this.player,
         });
