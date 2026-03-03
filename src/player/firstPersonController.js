@@ -513,6 +513,14 @@ export class FirstPersonController {
     return forward;
   }
 
+  /** Get the camera's aim direction (preserves vertical look angle for skills). */
+  getAimDirection() {
+    const dir = new THREE.Vector3(0, 0, -1);
+    dir.applyQuaternion(this.camera.quaternion);
+    dir.normalize();
+    return dir;
+  }
+
   /** Register ground / obstacle colliders. */
   addColliders(...objects) {
     this.collision.addColliders(...objects);

@@ -166,6 +166,9 @@ export class GameHUD {
       const skill = SKILLS[id];
       if (!skill || skill.passive) continue;
 
+      // Slot key: slots 0-8 → keys '1'-'9', slot 9 → key '0'
+      const slotKey = i < 9 ? String(i + 1) : '0';
+
       const slot = document.createElement('div');
       slot.style.cssText = `
         width:42px;height:42px;position:relative;
@@ -180,7 +183,7 @@ export class GameHUD {
         position:absolute;top:1px;left:3px;font-size:0.55rem;
         color:rgba(255,255,255,0.5);font-family:monospace;
       `;
-      keyLbl.textContent = skill.key || (i + 1);
+      keyLbl.textContent = slotKey;
       slot.appendChild(keyLbl);
 
       // Color dot

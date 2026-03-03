@@ -191,17 +191,26 @@ class Engine {
                 if (this._gameStarted) this._resumeGame();
                 else this.mainMenu.show();
             },
+            onSkillChange: () => {
+                this._rebuildHUDSkillBar();
+            },
         });
         this.shopUI.setCallbacks({
             onClose: () => {
                 if (this._gameStarted) this._resumeGame();
                 else this.mainMenu.show();
             },
+            onSkillChange: () => {
+                this._rebuildHUDSkillBar();
+            },
         });
 
         // ── Initial fog ─────────────────────────────────────
         const initSettings = this.settingsPanel.current;
         this.gameScene.raw.fog = new THREE.Fog(0x87ceeb, initSettings.fogNear, initSettings.fogFar);
+
+        // Apply persisted quality settings at boot
+        this._applySettings(initSettings);
 
         this._setupUI();
 
@@ -377,22 +386,22 @@ class Engine {
         }
     }
 
-    /** Use skill by number key. */
+    /** Use skill by number key (slot-based: 1-9 → slot 0-8, 0 → slot 9). */
     _useSkillByKey(key) {
         if (!this._gameStarted || this._paused || this._gameOver) return;
         if (this.player.isDead) return;
 
-        // Find skill mapped to this key
+        // Map key to equipped slot index
+        const slotIndex = key === '0' ? 9 : parseInt(key) - 1;
+        if (isNaN(slotIndex) || slotIndex < 0 || slotIndex > 9) return;
+
         const d = this.profile.data;
-        let skillId = null;
-        for (const id of d.unlockedSkills) {
-            const skill = SKILLS[id];
-            if (skill && skill.key === key) {
-                skillId = id;
-                break;
-            }
-        }
+        if (!d.equippedSkills) d.equippedSkills = [];
+        const skillId = d.equippedSkills[slotIndex];
         if (!skillId) return;
+
+        // Verify still unlocked
+        if (!d.unlockedSkills.includes(skillId)) return;
 
         const currentStamina = this.player.stamina * 100; // convert back to integer scale
         const check = this.skillSystem.canUse(skillId, currentStamina, d);
@@ -404,7 +413,7 @@ class Engine {
         const level = this.profile.getSkillLevel(skillId);
         const scene = this.gameScene.raw;
         const playerPos = this.player.getPosition().clone();
-        const forward = this.player.getForward();
+        const forward = this.player.getAimDirection(); // Use full 3D aim direction for skills
         const animalAI = this.animalAI;
         const effectSys = this.effectSystem;
         const playerCtrl = this.player;
@@ -470,9 +479,12 @@ class Engine {
 
     _rebuildHUDSkillBar() {
         if (!this.profile || !this.gameHUD) return;
-        const equipped = this.profile.data.unlockedSkills.filter(id => {
+        const d = this.profile.data;
+        if (!d.equippedSkills) d.equippedSkills = [];
+        // Pass equipped skills in slot order for HUD display
+        const equipped = d.equippedSkills.filter(id => {
             const s = SKILLS[id];
-            return s && !s.passive && s.key;
+            return s && !s.passive;
         });
         this.gameHUD.rebuildSkillBar(equipped);
     }

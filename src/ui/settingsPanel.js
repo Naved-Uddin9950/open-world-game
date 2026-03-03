@@ -110,6 +110,8 @@ const PRESETS = {
   },
 };
 
+const SETTINGS_STORAGE_KEY = 'openworld_graphics_settings';
+
 export class SettingsPanel {
   constructor() {
     this._el = null;
@@ -119,6 +121,9 @@ export class SettingsPanel {
     this._settings = { ...PRESETS.MEDIUM };
     this._onChange = null; // callback when settings change
     this._onClose = null;
+
+    // Load persisted settings
+    this._loadPersisted();
   }
 
   /** @returns {object} current resolved settings */
@@ -148,12 +153,40 @@ export class SettingsPanel {
     if (!p) return;
     this._currentPreset = name;
     this._settings = { ...p };
+    this._persist();
     this._notify();
     if (this._created) this._updateUI();
   }
 
   _notify() {
+    this._persist();
     if (this._onChange) this._onChange(this._settings);
+  }
+
+  /** Save current settings to localStorage. */
+  _persist() {
+    try {
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({
+        preset: this._currentPreset,
+        settings: this._settings,
+      }));
+    } catch { /* quota exceeded or private mode */ }
+  }
+
+  /** Load settings from localStorage. */
+  _loadPersisted() {
+    try {
+      const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (saved.preset && PRESETS[saved.preset]) {
+        this._currentPreset = saved.preset;
+        this._settings = { ...PRESETS[saved.preset], ...(saved.settings || {}) };
+      } else if (saved.settings) {
+        this._currentPreset = 'CUSTOM';
+        this._settings = { ...PRESETS.MEDIUM, ...saved.settings };
+      }
+    } catch { /* corrupted data, use defaults */ }
   }
 
   _create() {

@@ -15,7 +15,10 @@ export class ShopUI {
 
   setProfile(profile) { this._profile = profile; }
   setShopSystem(shop) { this._shopSystem = shop; }
-  setCallbacks({ onClose }) { this._onClose = onClose; }
+  setCallbacks({ onClose, onSkillChange }) {
+    this._onClose = onClose;
+    this._onSkillChange = onSkillChange || null;
+  }
 
   show() {
     if (!this._created) this._create();
@@ -199,6 +202,7 @@ export class ShopUI {
         if (action === 'buy') this._shopSystem.buySkill(id);
         else this._shopSystem.upgradeSkill(id);
         this._refresh();
+        if (this._onSkillChange) this._onSkillChange();
       });
     }
     card.appendChild(btn);

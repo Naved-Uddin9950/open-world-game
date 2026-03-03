@@ -190,6 +190,11 @@ export class EffectSystem {
     const color = active ? this._effectColor(type) : null;
     mesh.traverse(child => {
       if (child.isMesh && child.material) {
+        // Clone shared material on first tint to avoid affecting other instances
+        if (!child.userData._matCloned) {
+          child.material = child.material.clone();
+          child.userData._matCloned = true;
+        }
         if (color) {
           if (!child.userData._origColor) {
             child.userData._origColor = child.material.color ? child.material.color.getHex() : 0xffffff;

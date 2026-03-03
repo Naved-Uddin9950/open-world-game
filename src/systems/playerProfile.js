@@ -40,6 +40,7 @@ function createDefault(name = 'Player', dob = '2000-01-01', starterSkill = 'fire
     defence: 5,
     starterSkill,
     unlockedSkills: [starterSkill, 'super_speed'],
+    equippedSkills: [starterSkill],  // up to 10 slots for keys 1-9,0
     skillLevels: {},          // { skillId: level }
     totalKills: 0,
     playTime: 0,
@@ -71,6 +72,12 @@ export class PlayerProfile {
         const parsed = JSON.parse(raw);
         this.data = { ...createDefault(), ...parsed };
         this.data.age = this.age;
+        // Migrate: ensure equippedSkills exists
+        if (!this.data.equippedSkills) {
+          this.data.equippedSkills = this.data.unlockedSkills.filter(
+            id => id !== 'super_speed'
+          ).slice(0, 10);
+        }
         return true;
       } catch { /* corrupted */ }
     }
@@ -166,6 +173,11 @@ export class PlayerProfile {
     this.data.skillPoints -= cost;
     this.data.unlockedSkills.push(id);
     this.data.skillLevels[id] = 1;
+    // Auto-equip if there's a free slot (max 10 slots for keys 1-9, 0)
+    if (!this.data.equippedSkills) this.data.equippedSkills = [];
+    if (this.data.equippedSkills.length < 10) {
+      this.data.equippedSkills.push(id);
+    }
     this.save();
     return true;
   }
