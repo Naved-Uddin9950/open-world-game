@@ -480,13 +480,9 @@ class Engine {
     _rebuildHUDSkillBar() {
         if (!this.profile || !this.gameHUD) return;
         const d = this.profile.data;
-        if (!d.equippedSkills) d.equippedSkills = [];
-        // Pass equipped skills in slot order for HUD display
-        const equipped = d.equippedSkills.filter(id => {
-            const s = SKILLS[id];
-            return s && !s.passive;
-        });
-        this.gameHUD.rebuildSkillBar(equipped);
+        if (!Array.isArray(d.equippedSkills)) d.equippedSkills = [];
+        // Pass raw slot array so HUD key labels match actual hotkeys 1-9,0.
+        this.gameHUD.rebuildSkillBar(d.equippedSkills);
     }
 
     /** Hide the old firstPersonController HUD since GameHUD replaces it. */

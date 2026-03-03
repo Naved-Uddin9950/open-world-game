@@ -83,11 +83,33 @@ export class PlayerProfile {
         const parsed = JSON.parse(raw);
         this.data = { ...createDefault(), ...parsed };
         this.data.age = this.age;
-        // Migrate: ensure equippedSkills exists
-        if (!this.data.equippedSkills) {
-          this.data.equippedSkills = this.data.unlockedSkills.filter(
-            id => id !== 'super_speed'
-          ).slice(0, 10);
+        // Migrate: ensure equippedSkills exists and is sane (max 10 slots)
+        if (!Array.isArray(this.data.equippedSkills)) {
+          this.data.equippedSkills = this.data.unlockedSkills
+            .filter(id => id !== 'super_speed')
+            .slice(0, 10);
+        } else {
+          this.data.equippedSkills = this.data.equippedSkills
+            .slice(0, 10)
+            .map(id => (typeof id === 'string' ? id : null));
+        }
+
+        // Remove invalid / locked / duplicate equipped entries while preserving slot order
+        const seen = new Set();
+        this.data.equippedSkills = this.data.equippedSkills.map((id) => {
+          if (!id) return null;
+          if (id === 'super_speed') return null;
+          if (!this.data.unlockedSkills.includes(id)) return null;
+          if (seen.has(id)) return null;
+          seen.add(id);
+          return id;
+        });
+
+        // Backfill at least one active skill if all slots are empty
+        const hasAnyEquipped = this.data.equippedSkills.some(Boolean);
+        if (!hasAnyEquipped) {
+          const firstActive = this.data.unlockedSkills.find(id => id !== 'super_speed');
+          if (firstActive) this.data.equippedSkills[0] = firstActive;
         }
         return true;
       } catch { /* corrupted */ }
@@ -186,10 +208,15 @@ export class PlayerProfile {
     this.data.skillPoints -= cost;
     this.data.unlockedSkills.push(id);
     this.data.skillLevels[id] = 1;
-    // Auto-equip if there's a free slot (max 10 slots for keys 1-9, 0)
-    if (!this.data.equippedSkills) this.data.equippedSkills = [];
-    if (this.data.equippedSkills.length < 10) {
-      this.data.equippedSkills.push(id);
+    // Auto-equip into first free slot (max 10 slots for keys 1-9, 0)
+    if (!Array.isArray(this.data.equippedSkills)) this.data.equippedSkills = [];
+    if (this.getEquippedSlot(id) === -1) {
+      const freeIndex = this.data.equippedSkills.findIndex(slot => !slot);
+      if (freeIndex !== -1) {
+        this.data.equippedSkills[freeIndex] = id;
+      } else if (this.data.equippedSkills.length < 10) {
+        this.data.equippedSkills.push(id);
+      }
     }
     this.save();
     return true;
@@ -206,5 +233,49 @@ export class PlayerProfile {
 
   getSkillLevel(id) {
     return this.data.skillLevels[id] || 0;
+  }
+
+  getEquippedSlot(id) {
+    if (!Array.isArray(this.data.equippedSkills)) return -1;
+    return this.data.equippedSkills.indexOf(id);
+  }
+
+  isEquipped(id) {
+    return this.getEquippedSlot(id) !== -1;
+  }
+
+  equipSkill(id, preferredSlot = null) {
+    if (!this.hasSkill(id)) return false;
+    if (id === 'super_speed') return false;
+    if (!Array.isArray(this.data.equippedSkills)) this.data.equippedSkills = [];
+
+    // Already equipped
+    if (this.isEquipped(id)) return true;
+
+    // If a preferred slot is provided, use it
+    if (Number.isInteger(preferredSlot) && preferredSlot >= 0 && preferredSlot < 10) {
+      this.data.equippedSkills[preferredSlot] = id;
+      this.save();
+      return true;
+    }
+
+    // Otherwise use first free slot
+    let free = this.data.equippedSkills.findIndex(slot => !slot);
+    if (free === -1 && this.data.equippedSkills.length < 10) {
+      free = this.data.equippedSkills.length;
+    }
+    if (free === -1) return false;
+
+    this.data.equippedSkills[free] = id;
+    this.save();
+    return true;
+  }
+
+  unequipSkill(id) {
+    const slot = this.getEquippedSlot(id);
+    if (slot === -1) return false;
+    this.data.equippedSkills[slot] = null;
+    this.save();
+    return true;
   }
 }

@@ -154,15 +154,16 @@ export class GameHUD {
 
   /**
    * Rebuild skill slot bar (call when skills change).
-   * @param {string[]} equippedSkillIds - ordered list of skill ids to show
+   * @param {Array<string|null|undefined>} equippedSkillIds - slot-based list
    */
   rebuildSkillBar(equippedSkillIds) {
     if (!this._skillBar) return;
     this._skillBar.innerHTML = '';
     this._skillSlots = {};
 
-    for (let i = 0; i < equippedSkillIds.length; i++) {
+    for (let i = 0; i < Math.min(10, equippedSkillIds.length); i++) {
       const id = equippedSkillIds[i];
+      if (!id) continue;
       const skill = SKILLS[id];
       if (!skill || skill.passive) continue;
 

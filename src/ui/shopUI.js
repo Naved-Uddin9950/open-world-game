@@ -153,6 +153,7 @@ export class ShopUI {
 
   _shopCard(id, skill, cost, action, currentLevel = 0, maxLevel = 0) {
     const canAfford = this._profile.data.skillPoints >= cost;
+    const equippedSlot = this._profile.getEquippedSlot ? this._profile.getEquippedSlot(id) : -1;
     const card = document.createElement('div');
     card.style.cssText = `
       display:flex;justify-content:space-between;align-items:center;
@@ -168,6 +169,10 @@ export class ShopUI {
     nameEl.style.cssText = `font-size:0.9rem;color:${skill.color};font-weight:600;`;
     nameEl.textContent = skill.name;
     if (action === 'upgrade') nameEl.textContent += ` (Lv.${currentLevel} → ${currentLevel + 1})`;
+    if (equippedSlot !== -1) {
+      const key = equippedSlot < 9 ? String(equippedSlot + 1) : '0';
+      nameEl.textContent += ` [${key}]`;
+    }
     info.appendChild(nameEl);
 
     const descEl = document.createElement('div');
@@ -187,6 +192,23 @@ export class ShopUI {
     card.appendChild(info);
 
     // Buy/Upgrade button
+    if (action === 'upgrade') {
+      const eqBtn = document.createElement('button');
+      eqBtn.textContent = equippedSlot !== -1 ? 'Unequip' : 'Equip';
+      eqBtn.style.cssText = `
+        margin-left:10px;padding:6px 12px;font-size:0.75rem;
+        cursor:pointer;background:rgba(120,120,120,0.2);color:#ddd;
+        border:1px solid rgba(180,180,180,0.3);font-family:inherit;transition:all 0.15s;
+      `;
+      eqBtn.addEventListener('click', () => {
+        if (equippedSlot !== -1) this._profile.unequipSkill(id);
+        else this._profile.equipSkill(id);
+        this._refresh();
+        if (this._onSkillChange) this._onSkillChange();
+      });
+      card.appendChild(eqBtn);
+    }
+
     const btn = document.createElement('button');
     btn.textContent = action === 'buy' ? `Buy (${cost} SP)` : `Upgrade (${cost} SP)`;
     btn.style.cssText = `

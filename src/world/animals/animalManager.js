@@ -231,10 +231,10 @@ export class AnimalManager {
 
     _animalScaleFor(type) {
         switch (type) {
-            case 'cow': return 1.6;
-            case 'deer': return 1.4;
-            case 'wolf': return 0.9;
-            case 'chicken': return 0.6;
+            case 'cow': return 0.8;
+            case 'deer': return 0.8;
+            case 'wolf': return 0.85;
+            case 'chicken': return 0.55;
             default: return 1.0;
         }
     }

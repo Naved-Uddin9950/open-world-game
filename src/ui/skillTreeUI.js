@@ -125,6 +125,7 @@ export class SkillTreeUI {
   _skillCard(id, skill) {
     const owned = this._profile.hasSkill(id);
     const lvl = this._profile.getSkillLevel(id);
+    const equippedSlot = this._profile.getEquippedSlot ? this._profile.getEquippedSlot(id) : -1;
     const d = this._profile.data;
 
     const card = document.createElement('div');
@@ -143,7 +144,10 @@ export class SkillTreeUI {
     nameEl.style.cssText = `font-size:0.9rem;color:${owned ? skill.color : '#888'};font-weight:600;`;
     nameEl.textContent = skill.name;
     if (owned) nameEl.textContent += ` Lv.${lvl}/${skill.maxLevel}`;
-    if (skill.key) nameEl.textContent += ` [${skill.key}]`;
+    if (equippedSlot !== -1) {
+      const key = equippedSlot < 9 ? String(equippedSlot + 1) : '0';
+      nameEl.textContent += ` [${key}]`;
+    }
     info.appendChild(nameEl);
 
     const descEl = document.createElement('div');
@@ -190,6 +194,27 @@ export class SkillTreeUI {
     } else if (lvl < skill.maxLevel) {
       const cost = lvl;
       const canUp = d.skillPoints >= cost;
+      const key = equippedSlot !== -1 ? (equippedSlot < 9 ? String(equippedSlot + 1) : '0') : null;
+      const eqLabel = document.createElement('div');
+      eqLabel.style.cssText = 'font-size:0.65rem;color:#777;margin-bottom:4px;text-align:right;';
+      eqLabel.textContent = key ? `Equipped: [${key}]` : 'Not equipped';
+      btnWrap.appendChild(eqLabel);
+
+      const eqBtn = document.createElement('button');
+      eqBtn.textContent = equippedSlot !== -1 ? 'Unequip' : 'Equip';
+      eqBtn.style.cssText = `
+        display:block;width:100%;margin-bottom:4px;padding:3px 8px;font-size:0.72rem;
+        cursor:pointer;background:rgba(120,120,120,0.2);color:#ddd;
+        border:1px solid rgba(180,180,180,0.3);font-family:inherit;
+      `;
+      eqBtn.addEventListener('click', () => {
+        if (equippedSlot !== -1) this._profile.unequipSkill(id);
+        else this._profile.equipSkill(id);
+        this._refresh();
+        if (this._onSkillChange) this._onSkillChange();
+      });
+      btnWrap.appendChild(eqBtn);
+
       const btn = document.createElement('button');
       btn.textContent = `Upgrade (${cost} SP)`;
       btn.style.cssText = `
@@ -208,6 +233,27 @@ export class SkillTreeUI {
       }
       btnWrap.appendChild(btn);
     } else {
+      const key = equippedSlot !== -1 ? (equippedSlot < 9 ? String(equippedSlot + 1) : '0') : null;
+      const eqLabel = document.createElement('div');
+      eqLabel.style.cssText = 'font-size:0.65rem;color:#777;margin-bottom:4px;text-align:right;';
+      eqLabel.textContent = key ? `Equipped: [${key}]` : 'Not equipped';
+      btnWrap.appendChild(eqLabel);
+
+      const eqBtn = document.createElement('button');
+      eqBtn.textContent = equippedSlot !== -1 ? 'Unequip' : 'Equip';
+      eqBtn.style.cssText = `
+        display:block;width:100%;margin-bottom:4px;padding:3px 8px;font-size:0.72rem;
+        cursor:pointer;background:rgba(120,120,120,0.2);color:#ddd;
+        border:1px solid rgba(180,180,180,0.3);font-family:inherit;
+      `;
+      eqBtn.addEventListener('click', () => {
+        if (equippedSlot !== -1) this._profile.unequipSkill(id);
+        else this._profile.equipSkill(id);
+        this._refresh();
+        if (this._onSkillChange) this._onSkillChange();
+      });
+      btnWrap.appendChild(eqBtn);
+
       const maxLbl = document.createElement('span');
       maxLbl.textContent = 'MAX';
       maxLbl.style.cssText = 'color:#ffcc00;font-size:0.75rem;font-weight:600;';

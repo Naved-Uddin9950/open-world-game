@@ -305,9 +305,14 @@ export class AnimalAIController {
    */
   getEnemiesInRadius(pos, radius) {
     const results = [];
+    const radiusSq = radius * radius;
     for (const [uuid, brain] of this._brains) {
       if (brain.isDead) continue;
-      if (brain.position.distanceTo(pos) <= radius) {
+      const dx = brain.position.x - pos.x;
+      const dz = brain.position.z - pos.z;
+      const dy = Math.abs(brain.position.y - pos.y);
+      // Prioritise horizontal hit distance so projectiles from eye height still connect.
+      if ((dx * dx + dz * dz) <= radiusSq && dy <= 3.0) {
         results.push({ brain, mesh: brain.mesh });
       }
     }
