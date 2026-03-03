@@ -741,14 +741,12 @@ class Engine {
         }
 
         // ── Wolf evolution EXP ──────────────────────────────
-        if (this.wolfEvolution && this.wolfEvolution.data.wolves.length > 0) {
+        const wolves = this.wolfEvolution?.data?.wolves;
+        if (Array.isArray(wolves) && wolves.length > 0) {
             const wolfExp = Math.max(5, Math.floor(exp * 0.5));
             const intelligence = this.profile.data.intelligence || 10;
-            for (const wolfId of Object.keys(this.wolfEvolution.data.wolves.length ? {} : {})) {
-                // Award EXP to all active wolves
-            }
+
             // Award to all registered wolves
-            const wolves = this.wolfEvolution.data.wolves;
             for (let i = 0; i < wolves.length; i++) {
                 const result = this.wolfEvolution.addExp(i, wolfExp, intelligence);
                 if (result && result.evolved) {
