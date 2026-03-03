@@ -170,6 +170,7 @@ export class SettingsPanel {
         preset: this._currentPreset,
         settings: this._settings,
       }));
+      console.debug('[SettingsPanel] persisted settings', SETTINGS_STORAGE_KEY, this._currentPreset);
     } catch { /* quota exceeded or private mode */ }
   }
 
@@ -186,6 +187,7 @@ export class SettingsPanel {
         this._currentPreset = 'CUSTOM';
         this._settings = { ...PRESETS.MEDIUM, ...saved.settings };
       }
+      console.debug('[SettingsPanel] loaded persisted settings', SETTINGS_STORAGE_KEY, this._currentPreset);
     } catch { /* corrupted data, use defaults */ }
   }
 

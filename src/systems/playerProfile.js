@@ -52,6 +52,12 @@ export class PlayerProfile {
     /** @type {ReturnType<typeof createDefault>} */
     this.data = createDefault();
     this._dirty = false;
+    // Attempt to load persisted profile immediately so UIs see stored data
+    try {
+      this.load();
+    } catch (e) {
+      // swallow — load has its own guards, but protect constructor
+    }
   }
 
   /** Age auto-calculated from dob. */
@@ -61,7 +67,12 @@ export class PlayerProfile {
 
   save() {
     this.data.age = this.age;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+      console.debug('[PlayerProfile] saved to localStorage');
+    } catch (e) {
+      console.warn('[PlayerProfile] failed to save profile', e);
+    }
     this._dirty = false;
   }
 
@@ -81,6 +92,8 @@ export class PlayerProfile {
         return true;
       } catch { /* corrupted */ }
     }
+    // Nothing loaded
+    console.debug('[PlayerProfile] no saved profile found');
     return false;
   }
 
