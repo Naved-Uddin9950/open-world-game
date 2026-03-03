@@ -67,7 +67,7 @@ export class MainMenu {
 
     // Title
     const title = document.createElement('h1');
-    title.textContent = 'OPEN WORLD';
+    title.textContent = 'Atlansia RPG';
     title.style.cssText = `
       color: #aaddaa; font-size: 3.5rem; font-weight: 200;
       letter-spacing: 0.2em; text-transform: uppercase;
@@ -76,7 +76,7 @@ export class MainMenu {
     el.appendChild(title);
 
     const subtitle = document.createElement('p');
-    subtitle.textContent = 'A Wilderness Adventure';
+    subtitle.textContent = 'A World Of Atlansian Universe';
     subtitle.style.cssText = `
       color: rgba(140,180,140,0.6); font-size: 1rem;
       letter-spacing: 0.15em; margin-bottom: 3rem;
