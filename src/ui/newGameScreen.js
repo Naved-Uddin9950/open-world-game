@@ -26,6 +26,7 @@ export class NewGameScreen {
     this._selectedSkill = STARTER_SKILLS[0];
     this._gameMode = 'singleplayer';
     this._appearance = createDefaultAppearance();
+    this._appearanceCategory = 'body';
     this._step = 0; // 0=basic, 1=appearance, 2=skill, 3=stats
     this._statPoints = 10;
     this._statAlloc = { strength: 0, agility: 0, vitality: 0, intelligence: 0, endurance: 0 };
@@ -49,6 +50,7 @@ export class NewGameScreen {
     this._statPoints = 10;
     this._statAlloc = { strength: 0, agility: 0, vitality: 0, intelligence: 0, endurance: 0 };
     this._appearance = createDefaultAppearance();
+    this._appearanceCategory = 'body';
     if (!this._created) this._create();
     this._el.style.display = 'flex';
     this._showStep(0);
@@ -112,13 +114,24 @@ export class NewGameScreen {
     mesh.visible = true; // ensure visible in preview
     scene.add(mesh);
 
+    // Frame camera + floor from real mesh bounds
+    const frame = this._computePreviewFrame(mesh);
+    floor.position.y = frame.floorY;
+
     this._previewRenderer = renderer;
     this._previewScene = scene;
     this._previewCamera = camera;
     this._previewMesh = mesh;
 
     // Orbit controls (drag + wheel) without external deps
-    const orbit = { yaw: 0, pitch: 0.22, radius: 2.1, targetY: 1.02 };
+    const orbit = {
+      yaw: 0,
+      pitch: 0.16,
+      radius: frame.baseRadius,
+      targetY: frame.targetY,
+      minRadius: frame.minRadius,
+      maxRadius: frame.maxRadius,
+    };
     let dragging = false;
     let lastX = 0;
     let lastY = 0;
@@ -148,7 +161,7 @@ export class NewGameScreen {
     };
     const onWheel = (e) => {
       e.preventDefault();
-      orbit.radius = Math.max(1.5, Math.min(2.8, orbit.radius + e.deltaY * 0.0025));
+      orbit.radius = Math.max(orbit.minRadius, Math.min(orbit.maxRadius, orbit.radius + e.deltaY * 0.0025));
       lastInteractAt = performance.now();
     };
 
@@ -191,6 +204,36 @@ export class NewGameScreen {
     this._previewMesh = createPlayerCharacterMesh(this._appearance);
     this._previewMesh.visible = true;
     this._previewScene.add(this._previewMesh);
+
+    // Keep preview floor and framing aligned when body type/height changes
+    const frame = this._computePreviewFrame(this._previewMesh);
+    const floor = this._previewScene.children.find(o => o.geometry && o.geometry.type === 'CircleGeometry');
+    if (floor) {
+      floor.position.y = frame.floorY;
+      floor.scale.setScalar(frame.floorScale);
+    }
+  }
+
+  _computePreviewFrame(mesh) {
+    const box = new THREE.Box3().setFromObject(mesh);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const bodyHeight = Math.max(1.2, size.y || 1.7);
+    const targetY = center.y - bodyHeight * 0.18;
+    const floorY = box.min.y - 0.02;
+
+    return {
+      targetY,
+      floorY,
+      floorScale: Math.max(1.0, size.x * 1.8),
+      baseRadius: Math.max(2.2, maxDim * 1.55),
+      minRadius: Math.max(1.5, maxDim * 1.05),
+      maxRadius: Math.max(3.2, maxDim * 2.35),
+    };
   }
 
   // ════════════════════════════════════════════════════════
@@ -223,6 +266,14 @@ export class NewGameScreen {
   _showStep(step) {
     this._step = step;
     this._box.innerHTML = '';
+
+    if (step === 1) {
+      this._box.style.minWidth = '920px';
+      this._box.style.maxWidth = '1080px';
+    } else {
+      this._box.style.minWidth = '460px';
+      this._box.style.maxWidth = '620px';
+    }
 
     switch (step) {
       case 0: this._buildStep0_BasicInfo(); break;
@@ -296,85 +347,155 @@ export class NewGameScreen {
     box.appendChild(this._title('CUSTOMIZE APPEARANCE'));
     box.appendChild(this._stepIndicator(1));
 
-    // ── 3D Character Preview ──────────────────────────────
-    const previewContainer = document.createElement('div');
-    previewContainer.style.cssText = 'margin-bottom:18px;display:flex;justify-content:center;';
-    box.appendChild(previewContainer);
-    // Deferred so DOM is ready
-    setTimeout(() => this._createPreview(previewContainer), 0);
-
     const opts = CUSTOMIZATION_OPTIONS;
-
-    // Helper to update preview after any change
     const refreshPreview = () => setTimeout(() => this._updatePreview(), 0);
 
-    // Gender
-    box.appendChild(this._optionRow('Gender', opts.gender, this._appearance.gender,
-      (v) => { this._appearance.gender = v; refreshPreview(); }));
+    const layout = document.createElement('div');
+    layout.style.cssText = 'display:grid;grid-template-columns:1.25fr 1fr;gap:16px;align-items:start;margin-bottom:14px;';
 
-    // Body type
-    box.appendChild(this._optionRow('Body Type', opts.bodyType, this._appearance.bodyType,
-      (v) => { this._appearance.bodyType = v; refreshPreview(); }));
+    // ── Left: character preview ───────────────────────────
+    const leftPane = document.createElement('div');
+    leftPane.style.cssText = 'background:rgba(18,22,18,0.76);border:1px solid rgba(120,190,120,0.18);border-radius:10px;padding:12px;height:410px;';
+    const previewContainer = document.createElement('div');
+    previewContainer.style.cssText = 'display:flex;justify-content:center;height:90%;';
+    leftPane.appendChild(previewContainer);
+    const hint = document.createElement('div');
+    hint.textContent = 'Drag to rotate • Scroll to zoom';
+    hint.style.cssText = 'margin-top:10px;color:#7f927f;font-size:0.68rem;letter-spacing:0.06em;text-transform:uppercase;text-align:center;';
+    leftPane.appendChild(hint);
+    layout.appendChild(leftPane);
+    setTimeout(() => this._createPreview(previewContainer), 0);
 
-    // Height slider
-    box.appendChild(this._label(`Height: ${this._appearance.height} cm`));
-    const heightSlider = document.createElement('input');
-    heightSlider.type = 'range';
-    heightSlider.min = opts.height.min;
-    heightSlider.max = opts.height.max;
-    heightSlider.value = this._appearance.height;
-    heightSlider.style.cssText = 'width:100%;margin-bottom:16px;accent-color:#88cc88;';
-    heightSlider.addEventListener('input', () => {
-      this._appearance.height = parseInt(heightSlider.value);
-      heightSlider.previousElementSibling.textContent = `Height: ${this._appearance.height} cm`;
-      refreshPreview();
-    });
-    box.appendChild(heightSlider);
+    // ── Right: categories + trait content ────────────────
+    const rightPane = document.createElement('div');
+    rightPane.style.cssText = 'background:rgba(16,20,16,0.76);border:1px solid rgba(120,190,120,0.16);border-radius:10px;padding:10px;min-height:410px;';
 
-    // Skin color
-    box.appendChild(this._colorRow('Skin Color', opts.skinColor, this._appearance.skinColor,
-      (v) => { this._appearance.skinColor = v; refreshPreview(); }));
-
-    // Hair style
-    box.appendChild(this._optionRow('Hair Style', opts.hairStyle.map(h => h.id), this._appearance.hairStyle,
-      (v) => { this._appearance.hairStyle = v; refreshPreview(); }));
-
-    // Hair color
-    box.appendChild(this._colorRow('Hair Color', opts.hairColor, this._appearance.hairColor,
-      (v) => { this._appearance.hairColor = v; refreshPreview(); }));
-
-    // Eye color
-    box.appendChild(this._colorRow('Eye Color', opts.eyeColor, this._appearance.eyeColor,
-      (v) => { this._appearance.eyeColor = v; refreshPreview(); }));
-
-    // Facial hair (only if male)
-    if (this._appearance.gender === 'male') {
-      box.appendChild(this._optionRow('Facial Hair', opts.facialHair.map(f => f.id), this._appearance.facialHair,
-        (v) => { this._appearance.facialHair = v; refreshPreview(); }));
+    const categories = [
+      { id: 'body', label: 'Body' },
+      { id: 'hair', label: 'Hair' },
+      { id: 'face', label: 'Face' },
+      { id: 'clothes', label: 'Clothing' },
+      { id: 'extras', label: 'Extras' },
+    ];
+    if (!categories.some(c => c.id === this._appearanceCategory)) {
+      this._appearanceCategory = 'body';
     }
 
-    // Clothing
-    box.appendChild(this._optionRow('Upper', opts.upperClothing.map(c => c.id), this._appearance.upperClothing,
-      (v) => { this._appearance.upperClothing = v; refreshPreview(); }));
-    box.appendChild(this._optionRow('Lower', opts.lowerClothing.map(c => c.id), this._appearance.lowerClothing,
-      (v) => { this._appearance.lowerClothing = v; refreshPreview(); }));
-    box.appendChild(this._optionRow('Shoes', opts.shoes.map(c => c.id), this._appearance.shoes,
-      (v) => { this._appearance.shoes = v; refreshPreview(); }));
+    const catRow = document.createElement('div');
+    catRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;';
+    const content = document.createElement('div');
+    content.style.cssText = 'max-height:430px;overflow-y:auto;padding-right:2px;';
 
-    // Accessories
-    box.appendChild(this._optionRow('Accessory', opts.accessories.map(a => a.id), this._appearance.accessory,
-      (v) => { this._appearance.accessory = v; refreshPreview(); }));
-    box.appendChild(this._optionRow('Glasses', opts.glasses.map(g => g.id), this._appearance.glasses,
-      (v) => { this._appearance.glasses = v; refreshPreview(); }));
+    const renderCategory = () => {
+      content.innerHTML = '';
 
-    // Randomize button
-    const randBtn = this._btn('Randomize', () => {
-      this._appearance = randomizeAppearance();
-      this._showStep(1); // rebuild
-    }, '#ffaa44');
-    randBtn.style.marginBottom = '16px';
-    randBtn.style.width = '100%';
-    box.appendChild(randBtn);
+      if (this._appearanceCategory === 'body') {
+        content.appendChild(this._optionRow('Gender', opts.gender, this._appearance.gender,
+          (v) => {
+            this._appearance.gender = v;
+            if (v === 'female') {
+              this._appearance.facialHair = 'none';
+              if (!['medium', 'long', 'ponytail', 'braid', 'curly'].includes(this._appearance.hairStyle)) {
+                this._appearance.hairStyle = 'long';
+              }
+            }
+            refreshPreview();
+            renderCategory();
+          }));
+
+        content.appendChild(this._optionRow('Body Type', opts.bodyType, this._appearance.bodyType,
+          (v) => { this._appearance.bodyType = v; refreshPreview(); }));
+
+        content.appendChild(this._label(`Height: ${this._appearance.height} cm`));
+        const heightSlider = document.createElement('input');
+        heightSlider.type = 'range';
+        heightSlider.min = opts.height.min;
+        heightSlider.max = opts.height.max;
+        heightSlider.value = this._appearance.height;
+        heightSlider.style.cssText = 'width:100%;margin-bottom:12px;accent-color:#88cc88;';
+        heightSlider.addEventListener('input', () => {
+          this._appearance.height = parseInt(heightSlider.value);
+          heightSlider.previousElementSibling.textContent = `Height: ${this._appearance.height} cm`;
+          refreshPreview();
+        });
+        content.appendChild(heightSlider);
+      }
+
+      if (this._appearanceCategory === 'hair') {
+        content.appendChild(this._optionRow('Hair Style', opts.hairStyle.map(h => h.id), this._appearance.hairStyle,
+          (v) => { this._appearance.hairStyle = v; refreshPreview(); }));
+        content.appendChild(this._colorRow('Hair Color', opts.hairColor, this._appearance.hairColor,
+          (v) => { this._appearance.hairColor = v; refreshPreview(); }));
+      }
+
+      if (this._appearanceCategory === 'face') {
+        content.appendChild(this._colorRow('Skin Color', opts.skinColor, this._appearance.skinColor,
+          (v) => { this._appearance.skinColor = v; refreshPreview(); }));
+        content.appendChild(this._colorRow('Eye Color', opts.eyeColor, this._appearance.eyeColor,
+          (v) => { this._appearance.eyeColor = v; refreshPreview(); }));
+        if (this._appearance.gender === 'male') {
+          content.appendChild(this._optionRow('Facial Hair', opts.facialHair.map(f => f.id), this._appearance.facialHair,
+            (v) => { this._appearance.facialHair = v; refreshPreview(); }));
+        }
+      }
+
+      if (this._appearanceCategory === 'clothes') {
+        content.appendChild(this._optionRow('Upper', opts.upperClothing.map(c => c.id), this._appearance.upperClothing,
+          (v) => { this._appearance.upperClothing = v; refreshPreview(); }));
+        content.appendChild(this._optionRow('Lower', opts.lowerClothing.map(c => c.id), this._appearance.lowerClothing,
+          (v) => { this._appearance.lowerClothing = v; refreshPreview(); }));
+        content.appendChild(this._optionRow('Shoes', opts.shoes.map(c => c.id), this._appearance.shoes,
+          (v) => { this._appearance.shoes = v; refreshPreview(); }));
+      }
+
+      if (this._appearanceCategory === 'extras') {
+        content.appendChild(this._optionRow('Accessory', opts.accessories.map(a => a.id), this._appearance.accessory,
+          (v) => { this._appearance.accessory = v; refreshPreview(); }));
+        content.appendChild(this._optionRow('Glasses', opts.glasses.map(g => g.id), this._appearance.glasses,
+          (v) => { this._appearance.glasses = v; refreshPreview(); }));
+
+        const randBtn = this._btn('Randomize All', () => {
+          this._appearance = randomizeAppearance();
+          refreshPreview();
+          renderCategory();
+        }, '#ffaa44');
+        randBtn.style.marginTop = '8px';
+        randBtn.style.width = '100%';
+        content.appendChild(randBtn);
+      }
+    };
+
+    const catButtons = {};
+    for (const c of categories) {
+      const b = document.createElement('button');
+      const applyState = (active) => {
+        b.style.background = active ? 'rgba(100,200,100,0.22)' : 'rgba(36,42,36,0.76)';
+        b.style.borderColor = active ? 'rgba(100,200,100,0.5)' : 'rgba(255,255,255,0.09)';
+        b.style.color = active ? '#9dff9d' : '#9ea99e';
+      };
+      b.textContent = c.label;
+      b.style.cssText = 'padding:6px 12px;font-size:0.72rem;border-radius:7px;cursor:pointer;border:1px solid rgba(255,255,255,0.09);font-family:inherit;text-transform:uppercase;letter-spacing:0.06em;transition:all 0.15s;';
+      applyState(c.id === this._appearanceCategory);
+      b.addEventListener('click', () => {
+        this._appearanceCategory = c.id;
+        for (const [id, btn] of Object.entries(catButtons)) {
+          const active = id === c.id;
+          btn.style.background = active ? 'rgba(100,200,100,0.22)' : 'rgba(36,42,36,0.76)';
+          btn.style.borderColor = active ? 'rgba(100,200,100,0.5)' : 'rgba(255,255,255,0.09)';
+          btn.style.color = active ? '#9dff9d' : '#9ea99e';
+        }
+        renderCategory();
+      });
+      catButtons[c.id] = b;
+      catRow.appendChild(b);
+    }
+
+    rightPane.appendChild(catRow);
+    rightPane.appendChild(content);
+    renderCategory();
+    layout.appendChild(rightPane);
+
+    box.appendChild(layout);
 
     // Nav
     box.appendChild(this._navRow(

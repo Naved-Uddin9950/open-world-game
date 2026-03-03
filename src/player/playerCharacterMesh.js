@@ -84,8 +84,8 @@ export function createPlayerCharacterMesh(appearance) {
   else if (bodyType === 'heavy') W = 1.2;
 
   const isFemale = app.gender === 'female';
-  const shoulderW = isFemale ? 0.34 : 0.38;
-  const hipW      = isFemale ? 0.20 : 0.17;
+  const shoulderW = isFemale ? 0.33 : 0.38;
+  const hipW      = isFemale ? 0.225 : 0.17;
 
   // ════════════════════════════════════════════════════════
   // HEAD
@@ -171,12 +171,30 @@ export function createPlayerCharacterMesh(appearance) {
   const chest = box(shoulderW * S * W, 0.28 * S, 0.18 * S, upperMat);
   chest.name = 'chest';
   chest.position.set(0, 1.24 * S, 0);
+  if (isFemale) {
+    chest.scale.set(0.94, 1.0, 1.08);
+  }
   group.add(chest);
 
   const abdomen = box(0.3 * S * W, 0.18 * S, 0.16 * S, upperMat);
   abdomen.name = 'abdomen';
   abdomen.position.set(0, 1.01 * S, 0);
+  if (isFemale) {
+    abdomen.scale.set(0.86, 1.0, 0.96);
+  }
   group.add(abdomen);
+
+  if (isFemale) {
+    // Subtle bust shaping (under clothing) to differentiate silhouette.
+    const bustGeo = new THREE.SphereGeometry(0.075 * S * W, 10, 8);
+    for (const side of [-1, 1]) {
+      const bust = new THREE.Mesh(bustGeo, upperMat);
+      bust.position.set(side * 0.07 * S * W, 1.22 * S, 0.07 * S);
+      bust.scale.set(0.95, 0.9, 0.8);
+      bust.castShadow = true;
+      group.add(bust);
+    }
+  }
 
   const belt = box(0.32 * S * W, 0.04 * S, 0.17 * S, beltMat);
   belt.position.set(0, 0.91 * S, 0);
@@ -237,6 +255,9 @@ export function createPlayerCharacterMesh(appearance) {
   const hips = box(hipW * 2 * S * W, 0.08 * S, 0.15 * S, lowerMat);
   hips.name = 'hips';
   hips.position.set(0, 0.87 * S, 0);
+  if (isFemale) {
+    hips.scale.set(1.08, 1.0, 1.04);
+  }
   group.add(hips);
 
   // ════════════════════════════════════════════════════════
@@ -305,23 +326,57 @@ export function createPlayerCharacterMesh(appearance) {
 // Hair styles
 // ════════════════════════════════════════════════════════════
 function _addHair(grp, style, mat, S) {
+  const addBaseCap = (radius = 0.155, y = 0.025, topCut = 0.5) => {
+    const cap = new THREE.Mesh(
+      new THREE.SphereGeometry(radius * S, 14, 12, 0, Math.PI * 2, 0, Math.PI * topCut),
+      mat,
+    );
+    cap.position.y = y * S;
+    grp.add(cap);
+    return cap;
+  };
+
+  const addFrontFringe = (width, height, z) => {
+    const fringe = box(width * S, height * S, 0.045 * S, mat);
+    fringe.position.set(0, -0.005 * S, z * S);
+    fringe.rotation.x = -0.08;
+    grp.add(fringe);
+  };
+
+  const addSideburns = (drop = 0.11, width = 0.042) => {
+    for (const side of [-1, 1]) {
+      const sb = box(width * S, drop * S, 0.06 * S, mat);
+      sb.position.set(side * 0.122 * S, -0.03 * S, -0.01 * S);
+      sb.rotation.z = side * 0.08;
+      grp.add(sb);
+    }
+  };
+
   switch (style) {
     case 'bald': break;
     case 'short': {
-      const m = new THREE.Mesh(new THREE.SphereGeometry(0.155 * S, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), mat);
-      m.position.y = 0.02 * S; grp.add(m); break;
+      addBaseCap(0.15, 0.03, 0.46);
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.05 * S, 0.065 * S, 0.05 * S, 8), mat);
+      crown.position.set(0, 0.125 * S, -0.01 * S);
+      crown.rotation.x = 0.2;
+      grp.add(crown);
+      break;
     }
     case 'medium': {
-      const m = new THREE.Mesh(new THREE.SphereGeometry(0.165 * S, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.65), mat);
-      m.position.y = 0.02 * S; grp.add(m);
+      addBaseCap(0.162, 0.03, 0.6);
+      addSideburns(0.14, 0.045);
+      const back = box(0.22 * S, 0.18 * S, 0.06 * S, mat);
+      back.position.set(0, -0.09 * S, -0.1 * S);
+      grp.add(back);
       for (const s of [-1, 1]) {
-        const f = box(0.04 * S, 0.1 * S, 0.08 * S, mat);
-        f.position.set(s * 0.13 * S, -0.04 * S, -0.02 * S); grp.add(f);
+        const strand = box(0.05 * S, 0.16 * S, 0.06 * S, mat);
+        strand.position.set(s * 0.13 * S, -0.1 * S, -0.04 * S);
+        strand.rotation.z = s * 0.08;
+        grp.add(strand);
       } break;
     }
     case 'long': {
-      const m = new THREE.Mesh(new THREE.SphereGeometry(0.17 * S, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.6), mat);
-      m.position.y = 0.02 * S; grp.add(m);
+      addBaseCap(0.166, 0.03, 0.58);
       const d = box(0.2 * S, 0.25 * S, 0.04 * S, mat);
       d.position.set(0, -0.12 * S, -0.1 * S); grp.add(d); break;
     }
@@ -363,8 +418,8 @@ function _addHair(grp, style, mat, S) {
       } break;
     }
     default: {
-      const m = new THREE.Mesh(new THREE.SphereGeometry(0.155 * S, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), mat);
-      m.position.y = 0.02 * S; grp.add(m);
+      addBaseCap(0.15, 0.03, 0.46);
+      addSideburns(0.09, 0.036);
     }
   }
 }
