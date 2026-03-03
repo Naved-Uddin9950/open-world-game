@@ -458,8 +458,8 @@ class Engine {
         if (gameMode === 'multiplayer') {
             const rookieZone = ZONES.rookieTown;
             if (rookieZone && rookieZone.spawnPoint) {
-                spawnX = rookieZone.spawnPoint[0];
-                spawnZ = rookieZone.spawnPoint[1];
+                spawnX = Number.isFinite(rookieZone.spawnPoint.x) ? rookieZone.spawnPoint.x : 0;
+                spawnZ = Number.isFinite(rookieZone.spawnPoint.z) ? rookieZone.spawnPoint.z : 0;
             }
         }
         const spawnY = this.worldManager.getHeightAt(spawnX, spawnZ);
@@ -796,8 +796,8 @@ class Engine {
             // Move player to zone spawn if available
             const rookieZone = ZONES.rookieTown;
             if (rookieZone && rookieZone.spawnPoint) {
-                const sx = rookieZone.spawnPoint[0];
-                const sz = rookieZone.spawnPoint[1];
+                const sx = Number.isFinite(rookieZone.spawnPoint.x) ? rookieZone.spawnPoint.x : 0;
+                const sz = Number.isFinite(rookieZone.spawnPoint.z) ? rookieZone.spawnPoint.z : 0;
                 const sy = this.worldManager.getHeightAt(sx, sz);
                 this.player.player.position.set(sx, sy + 1.7, sz);
             }
@@ -811,6 +811,15 @@ class Engine {
             this.player.setHeightProvider((x, z) => this.worldManager.getHeightAt(x, z));
             // Keep player position where they are.
         }
+
+        // Rebind AI controller to the active world manager after mode switch
+        this.animalAI = new AnimalAIController(this.gameScene.raw, this.worldManager, {
+            dayProvider: () => this.dayNightCycle.isDay(),
+            playerRef: this.player,
+        });
+        this.animalAI.setKillCallback((type, mesh) => {
+            this._onAnimalKill(type, mesh);
+        });
 
         this._gameMode = newMode;
         this.profile.data.gameMode = newMode;
@@ -883,6 +892,13 @@ class Engine {
         this.worldManager.setRenderDistance(s.renderDist);
 
         if (this._paused || !this._gameStarted) return;
+
+        // Recover from invalid position state (e.g., old corrupted save/mode switch)
+        const p0 = this.player.getPosition();
+        if (!Number.isFinite(p0.x) || !Number.isFinite(p0.y) || !Number.isFinite(p0.z)) {
+            const safeY = this.worldManager.getHeightAt(0, 0);
+            this.player.player.position.set(0, safeY + 1.7, 0);
+        }
 
         // Player
         this.player.update(dt);
