@@ -12,6 +12,7 @@ import { AssetLoader } from './core/assetLoader.js';
 
 // ── Player ──────────────────────────────────────────────────
 import { FirstPersonController } from './player/firstPersonController.js';
+import { createPlayerCharacterMesh, animatePlayerCharacter } from './player/playerCharacterMesh.js';
 
 // ── World ───────────────────────────────────────────────────
 import { WorldManager } from './world/worldManager.js';
@@ -102,6 +103,10 @@ class Engine {
         );
         this.gameScene.add(this.player.player);
 
+        // ── Player character mesh (visible in 3rd person) ───
+        this._playerMesh = createPlayerCharacterMesh();
+        this.player.player.add(this._playerMesh);  // child of player Object3D
+
         // ── RPG Systems ─────────────────────────────────────
         this.profile = new PlayerProfile();
         this.skillSystem = new SkillSystem();
@@ -135,9 +140,6 @@ class Engine {
         this.worldSeedManager = null;
         this.worldGenerator = null;
         this._currentZone = null;
-
-        // ── Summon Wolf Manager ─────────────────────────────
-        this.summonWolfManager = new SummonWolfManager(this.gameScene.raw);
 
         // ── World ───────────────────────────────────────────
         this.worldManager = new WorldManager(this.gameScene.raw, this.player, this.assetLoader);
@@ -218,6 +220,32 @@ class Engine {
         this.player.setOpenProfileCallback(() => this._toggleOverlay(this.profilePanel));
         this.player.setOpenSkillTreeCallback(() => this._toggleOverlay(this.skillTreeUI));
         this.player.setOpenShopCallback(() => this._toggleOverlay(this.shopUI));
+
+        // ── Wire camera cycle (V key) ──────────────────────
+        this.player.setCycleCameraCallback(() => {
+            if (this.cameraController) {
+                const newMode = this.cameraController.cycleMode();
+                const modeName = this.cameraController.getModeName();
+                this._cameraMode = newMode;
+                this.gameHUD.showToast(`Camera: ${modeName}`, '#aaccff');
+                // Show/hide player mesh based on mode
+                if (this._playerMesh) {
+                    this._playerMesh.visible = (newMode !== CAMERA_MODE.FIRST_PERSON);
+                }
+            }
+        });
+
+        // ── Wire mouse orbit & scroll zoom to camera controller ─
+        this.player.setMouseInputCallback((dx, dy) => {
+            if (this.cameraController) {
+                this.cameraController.handleMouseMove(dx, dy);
+            }
+        });
+        this.player.setScrollCallback((delta) => {
+            if (this.cameraController) {
+                this.cameraController.handleScroll(delta);
+            }
+        });
 
         // ── UI ──────────────────────────────────────────────
         this.mainMenu = new MainMenu();
@@ -364,16 +392,16 @@ class Engine {
         // Restore new RPG system states from profile data
         const d = this.profile.data;
         if (d._wolfEvolution) {
-            this.wolfEvolution = WolfEvolutionManager.deserialize(d._wolfEvolution);
+            this.wolfEvolution.deserialize(d._wolfEvolution);
         }
         if (d._inventory) {
-            this.inventorySystem = InventorySystem.deserialize(d._inventory);
+            this.inventorySystem.deserialize(d._inventory);
         }
         if (d._guild) {
-            this.guildSystem = GuildSystem.deserialize(d._guild);
+            this.guildSystem.deserialize(d._guild);
         }
         if (d._quests) {
-            this.questManager = QuestManager.deserialize(d._quests);
+            this.questManager.deserialize(d._quests);
         }
         this._gameMode = d._gameMode || d.gameMode || 'singleplayer';
         if (d._worldSeed && this._gameMode === 'multiplayer') {
@@ -383,6 +411,11 @@ class Engine {
         }
 
         this._syncProfileToPlayer();
+
+        // Rebuild player mesh from saved appearance
+        if (d.appearance) {
+            this._rebuildPlayerMesh(d.appearance);
+        }
 
         this.mainMenu.hide();
         this._paused = false;
@@ -418,6 +451,8 @@ class Engine {
         // Store appearance data in profile
         if (appearance) {
             this.profile.data.appearance = appearance;
+            // Rebuild player mesh with new appearance colors
+            this._rebuildPlayerMesh(appearance);
         }
 
         // Store game mode in profile for save/load
@@ -517,6 +552,19 @@ class Engine {
         this.player.attackDamage = ds.meleeDamage01;
         this.player.attackCooldown = ds.attackCooldown;
         this.player.attackRange = ds.attackRange;
+    }
+
+    /**
+     * Rebuild the player character mesh with new appearance data.
+     */
+    _rebuildPlayerMesh(appearance) {
+        if (this._playerMesh) {
+            this.player.player.remove(this._playerMesh);
+        }
+        this._playerMesh = createPlayerCharacterMesh(appearance);
+        // Visible only in non-first-person modes
+        this._playerMesh.visible = (this._cameraMode !== CAMERA_MODE.FIRST_PERSON);
+        this.player.player.add(this._playerMesh);
     }
 
     /**
@@ -827,6 +875,8 @@ class Engine {
         this.gameHUD.showToast(`Mode switched: ${newMode}`, '#aaddaa');
         // Force immediate world update
         this.worldManager.update(this.player.getPosition());
+        // Resume gameplay after switching
+        this._resumeGame();
     }
 
     _handleEscape() {
@@ -960,8 +1010,8 @@ class Engine {
         }
 
         // ── Quest explore checks ────────────────────────────
-        if (this.questManager) {
-            const explored = this.questManager.reportExplore(playerPos.x, playerPos.z);
+        if (this.questManager && this._currentZone) {
+            const explored = this.questManager.reportExplore(this._currentZone.id) || [];
             for (const q of explored) {
                 this.gameHUD.showToast(`Quest Complete: ${q.name}!`, '#44ffaa');
                 if (q.rewards) {
@@ -975,6 +1025,14 @@ class Engine {
         if (this.cameraController) {
             const forward = this.player.getAimDirection ? this.player.getAimDirection() : new THREE.Vector3(0, 0, -1);
             this.cameraController.update(dt, playerPos, forward, null);
+        }
+
+        // ── Animate player character mesh ───────────────────
+        if (this._playerMesh) {
+            const mv = this.player.movement;
+            const isMoving = mv && (mv.forward || mv.backward || mv.left || mv.right);
+            const isSprinting = mv && mv.isSprinting;
+            animatePlayerCharacter(this._playerMesh, dt, isMoving, isSprinting);
         }
 
         // Day/Night cycle

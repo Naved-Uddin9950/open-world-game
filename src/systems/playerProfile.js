@@ -48,6 +48,16 @@ function createDefault(name = 'Player', dob = '2000-01-01', starterSkill = 'fire
     skillLevels: {},          // { skillId: level }
     totalKills: 0,
     playTime: 0,
+    // ── New RPG fields (added for save/load migration) ──
+    appearance: null,         // character customization data
+    gameMode: 'singleplayer', // 'singleplayer' or 'multiplayer'
+    _gameMode: 'singleplayer',
+    _inventory: null,         // InventorySystem serialized state
+    _guild: null,             // GuildSystem serialized state
+    _quests: null,            // QuestManager serialized state
+    _wolfEvolution: null,     // WolfEvolutionManager serialized state
+    _worldSeed: null,         // World seed string for multiplayer
+    _camera: null,            // CameraController serialized state
   };
 }
 

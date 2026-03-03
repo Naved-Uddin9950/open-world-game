@@ -285,21 +285,21 @@ export class QuestManager {
    * Report a kill event.
    */
   reportKill(creatureType, count = 1) {
-    this._reportObjective('kill', creatureType, count);
+    return this._reportObjective('kill', creatureType, count);
   }
 
   /**
    * Report item collection.
    */
   reportCollect(itemId, count = 1) {
-    this._reportObjective('collect', itemId, count);
+    return this._reportObjective('collect', itemId, count);
   }
 
   /**
    * Report zone exploration.
    */
   reportExplore(zoneId) {
-    this._reportObjective('explore', zoneId, 1);
+    return this._reportObjective('explore', zoneId, 1);
   }
 
   _reportObjective(type, target, count) {

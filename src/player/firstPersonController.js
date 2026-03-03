@@ -92,6 +92,9 @@ export class FirstPersonController {
     document.addEventListener("keydown", this._onKeyDown);
     document.addEventListener("keyup", this._onKeyUp);
     document.addEventListener("pointerlockchange", this._onPointerLockChange);
+    document.addEventListener("wheel", (e) => {
+      if (this._isLocked && this._onScroll) this._onScroll(e.deltaY);
+    }, { passive: true });
 
     // Click to lock
     this.domElement.addEventListener("click", () => {
@@ -114,6 +117,11 @@ export class FirstPersonController {
   /** Mouse look. */
   _onMouseMove(e) {
     if (!this._isLocked) return;
+
+    // Forward mouse movement to external handler (e.g. camera controller orbit)
+    if (this._onMouseInput) {
+      this._onMouseInput(e.movementX, e.movementY);
+    }
 
     this._euler.setFromQuaternion(this.camera.quaternion);
 
@@ -177,6 +185,9 @@ export class FirstPersonController {
         break;
       case "KeyB":
         if (this._onOpenShop) this._onOpenShop();
+        break;
+      case "KeyV":
+        if (this._onCycleCamera) this._onCycleCamera();
         break;
     }
   }
@@ -329,6 +340,9 @@ export class FirstPersonController {
   setOpenProfileCallback(fn) { this._onOpenProfile = fn; }
   setOpenSkillTreeCallback(fn) { this._onOpenSkillTree = fn; }
   setOpenShopCallback(fn) { this._onOpenShop = fn; }
+  setCycleCameraCallback(fn) { this._onCycleCamera = fn; }
+  setMouseInputCallback(fn) { this._onMouseInput = fn; }
+  setScrollCallback(fn) { this._onScroll = fn; }
 
   /**
    * Set the attack callback (called by Engine after AI controller is created).
