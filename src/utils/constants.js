@@ -190,3 +190,47 @@ export const FAMILIAR_WOLF_COUNT_AT_LEVEL = [1, 1, 2, 2, 3]; // wolves per skill
 export const FAMILIAR_WOLF_DURATION_BASE = 15;  // seconds at level 1
 export const FAMILIAR_WOLF_DURATION_PER_LEVEL = 5; // +seconds per level
 
+// ── Creature / Zone System ──────────────────────────────────
+export const CREATURE_SPAWN_RADIUS = 80;          // spawn creatures within this range
+export const CREATURE_DESPAWN_RADIUS = 120;        // despawn beyond this range
+export const CREATURE_MAX_ACTIVE = 30;             // max simultaneous creatures in scene
+export const CREATURE_RESPAWN_TIME = 60;           // seconds before a spawn node refreshes
+export const ZONE_TRANSITION_FADE = 1.5;           // seconds for zone fog/ambient transition
+export const ZONE_HUD_DISPLAY_TIME = 3.0;          // seconds to show "Entering <Zone>"
+
+// ── Camera Modes ─────────────────────────────────────────────
+export const CAMERA_THIRD_PERSON_DIST = 6;
+export const CAMERA_THIRD_PERSON_HEIGHT = 2.5;
+export const CAMERA_TOP_DOWN_HEIGHT = 18;
+export const CAMERA_TRANSITION_SPEED = 4.0;       // lerp speed for camera transitions
+export const CAMERA_COLLISION_OFFSET = 0.3;        // push cam forward on collision
+
+// ── Inventory ────────────────────────────────────────────────
+export const INVENTORY_MAX_SLOTS = 40;
+export const STARTING_GOLD = 100;
+export const ITEM_PICKUP_RADIUS = 3.0;
+export const LOOT_DROP_LIFETIME = 30;              // seconds before loot fades
+export const SHOP_BUY_MARKUP = 1.0;                // multiplier on base buy price
+export const SHOP_SELL_MARKDOWN = 0.5;             // sell price = buy * this
+
+// ── Guild ────────────────────────────────────────────────────
+export const GUILD_MISSION_BOARD_SIZE = 5;         // missions on the board at once
+export const GUILD_MISSION_REFRESH_TIME = 300;     // seconds between board refreshes
+export const GUILD_ABANDON_GP_PENALTY = 5;
+export const GUILD_MAX_ACTIVE_MISSIONS = 5;
+
+// ── Quest ────────────────────────────────────────────────────
+export const MAX_ACTIVE_QUESTS = 10;
+export const QUEST_MARKER_RADIUS = 3.0;            // proximity to complete explore quests
+
+// ── Wolf Evolution ───────────────────────────────────────────
+export const WOLF_EVO_STAGE_1_LEVEL = 1;           // familiarWolf
+export const WOLF_EVO_STAGE_2_LEVEL = 10;          // direFangWolf
+export const WOLF_EVO_STAGE_3_LEVEL = 25;          // shadowFenrir
+export const WOLF_EVO_STAGE_4_LEVEL = 50;          // spiritAlpha
+export const WOLF_EVO_INT_GROWTH_BONUS = 0.02;     // +2% exp per INT above 10
+
+// ── Stat Curves ──────────────────────────────────────────────
+export const STAT_SOFT_CAP_DEFAULT = 80;           // stat level where soft-cap kicks in
+export const STAT_SOFT_CAP_MULT = 0.5;             // multiplier above soft cap
+

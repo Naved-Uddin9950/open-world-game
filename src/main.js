@@ -30,8 +30,22 @@ import { ShopSystem } from './systems/shopSystem.js';
 
 // ── Combat / Stats ──────────────────────────────────────────
 import { computeDerivedStats } from './combat/statScaler.js';
+import { computeDerivedStatsCurved } from './systems/statCurves.js';
 import { calcMeleeDamage, toBrainScale } from './combat/damageCalculator.js';
 import { SummonWolfManager } from './skills/summonWolf.js';
+
+// ── New RPG Systems ─────────────────────────────────────────
+import { WolfEvolutionManager } from './summons/wolfEvolution.js';
+import { getZoneAtPosition, ZONES } from './world/worldConfig.js';
+import { WorldSeedManager } from './world/worldSeedManager.js';
+import { WorldGenerator } from './world/worldGenerator.js';
+import { CREATURES, getScaledCreatureStats, getCreaturesForZone } from './entities/creatures/creatureDatabase.js';
+import { createCreatureMesh } from './entities/creatures/creatureFactory.js';
+import { InventorySystem } from './inventory/inventorySystem.js';
+import { getItem, getItemsByCategory } from './inventory/itemDatabase.js';
+import { GuildSystem } from './guild/guildSystem.js';
+import { QuestManager } from './quests/questManager.js';
+import { CameraController, CAMERA_MODE } from './camera/cameraController.js';
 
 // ── UI ──────────────────────────────────────────────────────
 import { MainMenu } from './ui/mainMenu.js';
@@ -44,9 +58,24 @@ import { SkillTreeUI } from './ui/skillTreeUI.js';
 import { ShopUI } from './ui/shopUI.js';
 import { GameHUD } from './ui/gameHUD.js';
 
-// ── EXP rewards per animal type ─────────────────────────────
-const EXP_TABLE = { chicken: 10, cow: 25, deer: 30, wolf: 50 };
-const SKILL_DROP_CHANCE = { chicken: 0.1, cow: 0.25, deer: 0.3, wolf: 0.5 };
+// ── EXP rewards per creature type ───────────────────────────
+// Legacy animal types kept for backward compat; new creatures auto-pull from creatureDatabase
+const EXP_TABLE = {
+    chicken: 10, cow: 25, deer: 30, wolf: 50,
+    slime: 8, smallGoblin: 15, goblin: 35, goblinArcher: 40,
+    direWolf: 55, forestGolem: 70, orc: 90, undeadKnight: 100,
+    wyvern: 120, iceGolem: 130, frostBear: 110, fireDrake: 140,
+    sandGolem: 150, scorpionKing: 200, demonGeneral: 300,
+    iceDragon: 400, ancientDragon: 500,
+};
+const SKILL_DROP_CHANCE = {
+    chicken: 0.1, cow: 0.25, deer: 0.3, wolf: 0.5,
+    slime: 0.08, smallGoblin: 0.12, goblin: 0.2, goblinArcher: 0.22,
+    direWolf: 0.3, forestGolem: 0.35, orc: 0.4, undeadKnight: 0.45,
+    wyvern: 0.5, iceGolem: 0.5, frostBear: 0.45, fireDrake: 0.55,
+    sandGolem: 0.55, scorpionKing: 0.6, demonGeneral: 0.7,
+    iceDragon: 0.8, ancientDragon: 0.9,
+};
 
 // ═══════════════════════════════════════════════════════════
 // Engine initialisation
@@ -80,7 +109,32 @@ class Engine {
         this.shopSystem = new ShopSystem(this.profile);
 
         // ── Derived stats cache (recomputed on profile sync) ─
-        this._derivedStats = computeDerivedStats(this.profile.data);
+        this._derivedStats = computeDerivedStatsCurved(this.profile.data);
+
+        // ── Summon Wolf Manager ─────────────────────────────
+        this.summonWolfManager = new SummonWolfManager(this.gameScene.raw);
+
+        // ── Wolf Evolution ──────────────────────────────────
+        this.wolfEvolution = new WolfEvolutionManager();
+
+        // ── Inventory System ────────────────────────────────
+        this.inventorySystem = new InventorySystem();
+
+        // ── Guild System ────────────────────────────────────
+        this.guildSystem = new GuildSystem();
+
+        // ── Quest Manager ───────────────────────────────────
+        this.questManager = new QuestManager();
+
+        // ── Camera Controller (multi-mode) ──────────────────
+        this.cameraController = new CameraController(this.gameCamera.raw);
+        this._cameraMode = CAMERA_MODE.FIRST_PERSON;
+
+        // ── Game Mode & World Gen ───────────────────────────
+        this._gameMode = 'singleplayer'; // or 'multiplayer'
+        this.worldSeedManager = null;
+        this.worldGenerator = null;
+        this._currentZone = null;
 
         // ── Summon Wolf Manager ─────────────────────────────
         this.summonWolfManager = new SummonWolfManager(this.gameScene.raw);
@@ -199,7 +253,7 @@ class Engine {
 
         // ── New Game screen callbacks ───────────────────────
         this.newGameScreen.setCallbacks({
-            onConfirm: (name, dob, starterSkill) => this._startNewGame(name, dob, starterSkill),
+            onConfirm: (data) => this._startNewGame(data.name, data.dob, data.starterSkill, data.gameMode, data.appearance, data.statAllocation),
             onBack: () => this.mainMenu.show(),
         });
 
@@ -305,6 +359,28 @@ class Engine {
         }
         // Load existing profile
         this.profile.load();
+
+        // Restore new RPG system states from profile data
+        const d = this.profile.data;
+        if (d._wolfEvolution) {
+            this.wolfEvolution = WolfEvolutionManager.deserialize(d._wolfEvolution);
+        }
+        if (d._inventory) {
+            this.inventorySystem = InventorySystem.deserialize(d._inventory);
+        }
+        if (d._guild) {
+            this.guildSystem = GuildSystem.deserialize(d._guild);
+        }
+        if (d._quests) {
+            this.questManager = QuestManager.deserialize(d._quests);
+        }
+        this._gameMode = d._gameMode || d.gameMode || 'singleplayer';
+        if (d._worldSeed && this._gameMode === 'multiplayer') {
+            this.worldSeedManager = WorldSeedManager.fromSave(d._worldSeed);
+            this.worldGenerator = new WorldGenerator(this.worldSeedManager);
+            this.worldGenerator.generate();
+        }
+
         this._syncProfileToPlayer();
 
         this.mainMenu.hide();
@@ -318,12 +394,34 @@ class Engine {
         this.canvas.requestPointerLock();
     }
 
-    async _startNewGame(name, dob, starterSkill) {
+    async _startNewGame(name, dob, starterSkill, gameMode = 'singleplayer', appearance = null, statAllocation = null) {
         // Delete old save
         await this.saveSystem.deleteSave();
 
+        // Store game mode
+        this._gameMode = gameMode;
+
         // Create fresh profile
         this.profile.create(name, dob, starterSkill);
+
+        // Apply starting stat allocation (10 bonus points)
+        if (statAllocation) {
+            const d = this.profile.data;
+            for (const [stat, pts] of Object.entries(statAllocation)) {
+                if (d[stat] !== undefined && pts > 0) {
+                    d[stat] += pts;
+                }
+            }
+        }
+
+        // Store appearance data in profile
+        if (appearance) {
+            this.profile.data.appearance = appearance;
+        }
+
+        // Store game mode in profile for save/load
+        this.profile.data.gameMode = gameMode;
+
         this._syncProfileToPlayer();
 
         // Reset player
@@ -337,9 +435,34 @@ class Engine {
         this.skillSystem.dispose();
         if (this.summonWolfManager) this.summonWolfManager.disposeAll();
 
-        // Spawn at origin
-        const spawnY = this.worldManager.getHeightAt(0, 0);
-        this.player.player.position.set(0, spawnY + 1.7, 0);
+        // Reset new systems
+        this.wolfEvolution = new WolfEvolutionManager();
+        this.inventorySystem = new InventorySystem();
+        this.guildSystem = new GuildSystem();
+        this.questManager = new QuestManager();
+
+        // Init world generator for multiplayer (finite deterministic) mode
+        if (gameMode === 'multiplayer') {
+            const seed = name + '_' + Date.now();
+            this.worldSeedManager = new WorldSeedManager(seed);
+            this.worldGenerator = new WorldGenerator(this.worldSeedManager);
+            this.worldGenerator.generate();
+        } else {
+            this.worldSeedManager = null;
+            this.worldGenerator = null;
+        }
+
+        // Spawn at origin (or zone spawn point for multiplayer)
+        let spawnX = 0, spawnZ = 0;
+        if (gameMode === 'multiplayer') {
+            const rookieZone = ZONES.rookieTown;
+            if (rookieZone && rookieZone.spawnPoint) {
+                spawnX = rookieZone.spawnPoint[0];
+                spawnZ = rookieZone.spawnPoint[1];
+            }
+        }
+        const spawnY = this.worldManager.getHeightAt(spawnX, spawnZ);
+        this.player.player.position.set(spawnX, spawnY + 1.7, spawnZ);
         this.worldManager.update(this.player.getPosition());
 
         this.newGameScreen.hide();
@@ -363,11 +486,24 @@ class Engine {
 
     /**
      * Sync profile stats → player controller.
-     * Uses computeDerivedStats for stat-based combat values.
+     * Uses computeDerivedStatsCurved for non-linear stat scaling.
+     * Adds equipment bonuses from inventory system.
      */
     _syncProfileToPlayer() {
         const d = this.profile.data;
-        const ds = computeDerivedStats(d);
+        const ds = computeDerivedStatsCurved(d);
+
+        // Add inventory equipment bonuses
+        if (this.inventorySystem) {
+            const equipBonus = this.inventorySystem.getEquipmentBonuses();
+            ds.maxHealth += equipBonus.health || 0;
+            ds.maxStamina += equipBonus.stamina || 0;
+            ds.meleeDamage += equipBonus.attack || 0;
+            ds.defence += equipBonus.defense || 0;
+            // Recalculate 0-1 scale versions
+            ds.meleeDamage01 = ds.meleeDamage / 100;
+        }
+
         this._derivedStats = ds;
 
         // Convert to controller 0-1 scale
@@ -391,10 +527,13 @@ class Engine {
         d.stamina = Math.round(this.player.stamina * 100);
     }
 
-    /** EXP rewards when an animal is killed. */
+    /** EXP rewards when a creature/animal is killed. */
     _onAnimalKill(type, mesh) {
         if (!this._gameStarted || this._gameOver) return;
-        const exp = EXP_TABLE[type] || 15;
+
+        // Use creature database EXP if available, fallback to legacy table
+        const creatureData = CREATURES[type];
+        const exp = creatureData ? creatureData.expReward : (EXP_TABLE[type] || 15);
         const leveledUp = this.profile.addExp(exp);
 
         this.profile.data.totalKills++;
@@ -404,15 +543,77 @@ class Engine {
 
         if (leveledUp) {
             this.gameHUD.showToast(`LEVEL UP! You are now level ${this.profile.data.level}`, '#ffcc00');
-            this._syncProfileToPlayer(); // recalculates derived stats
+            this._syncProfileToPlayer();
         }
 
         // Random skill point drop
-        const dropChance = SKILL_DROP_CHANCE[type] || 0.15;
+        const dropChance = SKILL_DROP_CHANCE[type] || (creatureData ? Math.min(0.9, creatureData.expReward / 500) : 0.15);
         if (Math.random() < dropChance) {
             const pts = 1;
             this.profile.addSkillPoints(pts);
             this.gameHUD.showToast(`+${pts} Skill Point dropped!`, '#ff88ff');
+        }
+
+        // ── Guild mission progress ──────────────────────────
+        if (this.guildSystem && this.guildSystem.data.joined) {
+            const completed = this.guildSystem.reportProgress(type, 1);
+            for (const mission of completed) {
+                this.gameHUD.showToast(`Mission Complete: ${mission.title}! +${mission.gpReward} GP`, '#ffaa44');
+                this.profile.addExp(mission.expReward || 0);
+                if (this.inventorySystem) this.inventorySystem.addGold(mission.goldReward || 0);
+            }
+        }
+
+        // ── Quest progress (kill objectives) ────────────────
+        if (this.questManager) {
+            const completed = this.questManager.reportKill(type, 1);
+            for (const q of completed) {
+                this.gameHUD.showToast(`Quest Complete: ${q.name}!`, '#44ffaa');
+                if (q.rewards) {
+                    if (q.rewards.exp) this.profile.addExp(q.rewards.exp);
+                    if (q.rewards.gold && this.inventorySystem) this.inventorySystem.addGold(q.rewards.gold);
+                    if (q.rewards.gp && this.guildSystem) this.guildSystem.addGP(q.rewards.gp);
+                }
+            }
+        }
+
+        // ── Wolf evolution EXP ──────────────────────────────
+        if (this.wolfEvolution && this.wolfEvolution.data.wolves.length > 0) {
+            const wolfExp = Math.max(5, Math.floor(exp * 0.5));
+            const intelligence = this.profile.data.intelligence || 10;
+            for (const wolfId of Object.keys(this.wolfEvolution.data.wolves.length ? {} : {})) {
+                // Award EXP to all active wolves
+            }
+            // Award to all registered wolves
+            const wolves = this.wolfEvolution.data.wolves;
+            for (let i = 0; i < wolves.length; i++) {
+                const result = this.wolfEvolution.addExp(i, wolfExp, intelligence);
+                if (result && result.evolved) {
+                    this.gameHUD.showToast(`Wolf evolved to ${result.newStage}!`, '#aa88ff');
+                }
+                if (result && result.leveledUp) {
+                    this.gameHUD.showToast(`Wolf leveled up to ${result.newLevel}!`, '#8888ff');
+                }
+            }
+        }
+
+        // ── Inventory loot drops ────────────────────────────
+        if (this.inventorySystem && creatureData && creatureData.drops) {
+            for (const drop of creatureData.drops) {
+                if (Math.random() < (creatureData.dropChance || 0.5)) {
+                    const added = this.inventorySystem.addItem(drop.itemId, drop.quantity || 1);
+                    if (added) {
+                        const item = getItem(drop.itemId);
+                        if (item) this.gameHUD.showToast(`Looted: ${item.name}`, '#cccc44');
+                    }
+                }
+            }
+            // Gold drop
+            const goldDrop = Math.floor(exp * 0.3 + Math.random() * exp * 0.2);
+            if (goldDrop > 0) {
+                this.inventorySystem.addGold(goldDrop);
+                this.gameHUD.showToast(`+${goldDrop} Gold`, '#ffdd44');
+            }
         }
     }
 
@@ -531,6 +732,17 @@ class Engine {
     async _saveGame() {
         this._syncPlayerToProfile();
         this.profile.save();
+
+        // Save new RPG system states into profile data for persistence
+        const d = this.profile.data;
+        if (this.wolfEvolution) d._wolfEvolution = this.wolfEvolution.serialize();
+        if (this.inventorySystem) d._inventory = this.inventorySystem.serialize();
+        if (this.guildSystem) d._guild = this.guildSystem.serialize();
+        if (this.questManager) d._quests = this.questManager.serialize();
+        d._gameMode = this._gameMode;
+        if (this.worldSeedManager) d._worldSeed = this.worldSeedManager.serialize();
+        this.profile.save();
+
         const state = SaveSystem.gatherState(this.player, this.dayNightCycle);
         await this.saveSystem.save(state);
         this.gameHUD.showToast('Game saved.', '#aaddaa');
@@ -664,6 +876,37 @@ class Engine {
                 : [];
             const getHeight = (x, z) => this.worldManager.getHeightAt(x, z);
             this.summonWolfManager.update(dt, nearbyEnemies, getHeight);
+        }
+
+        // Wolf evolution cooldowns
+        if (this.wolfEvolution) {
+            this.wolfEvolution.updateCooldowns(dt);
+        }
+
+        // ── Zone tracking (finite world) ────────────────────
+        const playerPos = this.player.getPosition();
+        const zone = getZoneAtPosition(playerPos.x, playerPos.z);
+        if (zone && (!this._currentZone || this._currentZone.id !== zone.id)) {
+            this._currentZone = zone;
+            this.gameHUD.showToast(`Entering: ${zone.name}`, '#aaddaa');
+        }
+
+        // ── Quest explore checks ────────────────────────────
+        if (this.questManager) {
+            const explored = this.questManager.reportExplore(playerPos.x, playerPos.z);
+            for (const q of explored) {
+                this.gameHUD.showToast(`Quest Complete: ${q.name}!`, '#44ffaa');
+                if (q.rewards) {
+                    if (q.rewards.exp) this.profile.addExp(q.rewards.exp);
+                    if (q.rewards.gold && this.inventorySystem) this.inventorySystem.addGold(q.rewards.gold);
+                }
+            }
+        }
+
+        // ── Camera controller update ────────────────────────
+        if (this.cameraController) {
+            const forward = this.player.getAimDirection ? this.player.getAimDirection() : new THREE.Vector3(0, 0, -1);
+            this.cameraController.update(dt, playerPos, forward, null);
         }
 
         // Day/Night cycle
