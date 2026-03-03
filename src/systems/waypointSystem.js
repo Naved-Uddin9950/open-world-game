@@ -176,6 +176,7 @@ export class WaypointSystem {
       new THREE.CylinderGeometry(0.05, 0.05, 8, 6),
       new THREE.MeshBasicMaterial({ color: '#ffcc33', transparent: true, opacity: 0.35 })
     );
+    beam.name = 'wpBeam';
     beam.position.y = 4;
     g.add(beam);
 
@@ -184,14 +185,32 @@ export class WaypointSystem {
       new THREE.OctahedronGeometry(0.4, 0),
       new THREE.MeshBasicMaterial({ color: '#ffaa00', transparent: true, opacity: 0.7 })
     );
+    diamond.name = 'wpDiamond';
     diamond.position.y = 8.5;
     g.add(diamond);
+
+    // Stacked downward arrows (very visible from distance)
+    const arrows = new THREE.Group();
+    arrows.name = 'wpArrows';
+    for (let i = 0; i < 3; i++) {
+      const arrow = new THREE.Mesh(
+        new THREE.ConeGeometry(0.24 - i * 0.03, 0.42, 4),
+        new THREE.MeshBasicMaterial({ color: '#ffd95a', transparent: true, opacity: 0.85 - i * 0.2 })
+      );
+      arrow.name = `wpArrow${i}`;
+      arrow.rotation.x = Math.PI;
+      arrow.rotation.y = Math.PI / 4;
+      arrow.position.y = 7.6 - i * 0.5;
+      arrows.add(arrow);
+    }
+    g.add(arrows);
 
     // Ring at ground
     const ring = new THREE.Mesh(
       new THREE.TorusGeometry(0.8, 0.08, 8, 24),
       new THREE.MeshBasicMaterial({ color: '#ffcc33', transparent: true, opacity: 0.4 })
     );
+    ring.name = 'wpRing';
     ring.rotation.x = Math.PI / 2;
     ring.position.y = 0.1;
     g.add(ring);
@@ -212,22 +231,33 @@ export class WaypointSystem {
 
     this._marker.position.copy(this._targetPos);
 
-    // Animate: rotate diamond, pulse ring
+    // Animate: rotate diamond, pulse ring, bob arrows
     this._phase += dt * 2;
-    const diamond = this._marker.children[1];
+    const diamond = this._marker.getObjectByName('wpDiamond');
     if (diamond) diamond.rotation.y = this._phase;
 
-    const ring = this._marker.children[2];
+    const ring = this._marker.getObjectByName('wpRing');
     if (ring) {
       const scale = 1 + Math.sin(this._phase * 1.5) * 0.15;
       ring.scale.set(scale, scale, 1);
+    }
+
+    const arrows = this._marker.getObjectByName('wpArrows');
+    if (arrows) {
+      arrows.position.y = Math.sin(this._phase * 2.2) * 0.14;
+      arrows.rotation.y = this._phase * 0.5;
     }
 
     // Fade marker when very close
     const dist = this.distance;
     const opacity = dist < 5 ? dist / 5 : 1;
     this._marker.children.forEach(c => {
-      if (c.material) c.material.opacity = opacity * 0.5;
+      if (c.material) c.material.opacity = opacity * 0.65;
+      if (c.isGroup) {
+        c.children.forEach(sc => {
+          if (sc.material) sc.material.opacity = Math.min(1, opacity * 0.9);
+        });
+      }
     });
   }
 

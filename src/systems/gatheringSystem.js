@@ -370,7 +370,7 @@ export class GatheringSystem {
     const results = [];
     const r2 = radius * radius;
     for (const [key, nd] of this._activeNodes) {
-      if (nd.type !== type) continue;
+      if (type && nd.type !== type) continue;
       const dx = nd.x - playerPos.x;
       const dz = nd.z - playerPos.z;
       const d2 = dx * dx + dz * dz;

@@ -12,11 +12,17 @@ export class GuildUI {
     this._visible = false;
     this._guildSystem = null;
     this._onClose = null;
+    this._onTrackMission = null;
     this._currentTab = 'board';
+    this._trackedMissionId = null;
   }
 
   setGuildSystem(gs) { this._guildSystem = gs; }
-  setCallbacks({ onClose }) { this._onClose = onClose; }
+  setCallbacks({ onClose, onTrackMission }) {
+    this._onClose = onClose;
+    this._onTrackMission = onTrackMission || null;
+  }
+  setTrackedMissionId(missionId) { this._trackedMissionId = missionId || null; }
   isVisible() { return this._visible; }
 
   show() {
@@ -220,6 +226,13 @@ export class GuildUI {
       progText.style.cssText = 'color:#aaa;font-size:0.6rem;';
       progText.textContent = `${m.currentCount} / ${m.requiredCount}`;
       card.appendChild(progText);
+
+      if (m.tier === 'gathering') {
+        const hint = document.createElement('div');
+        hint.style.cssText = 'color:#7fa67f;font-size:0.58rem;margin-top:2px;';
+        hint.textContent = 'Gather in world with [E/F] near resource nodes';
+        card.appendChild(hint);
+      }
     }
 
     // Rewards
@@ -251,12 +264,35 @@ export class GuildUI {
         border:1px solid rgba(100,200,100,0.4);font-family:inherit;
       `;
       acceptBtn.addEventListener('click', () => {
-        this._guildSystem.acceptMission(m.id);
+        const accepted = this._guildSystem.acceptMission(m.id);
+        if (accepted) {
+          const acceptedMission = this._guildSystem.activeMissions.find(am => am.id === m.id);
+          if (acceptedMission) {
+            this._trackedMissionId = acceptedMission.id;
+            if (this._onTrackMission) this._onTrackMission(acceptedMission);
+          }
+        }
         this._refresh();
       });
       actions.appendChild(acceptBtn);
     }
     if (m.status === 'active') {
+      const isTracked = this._trackedMissionId === m.id;
+      const trackBtn = document.createElement('button');
+      trackBtn.textContent = isTracked ? 'Tracked' : 'Track';
+      trackBtn.style.cssText = `
+        padding:3px 12px;font-size:0.65rem;cursor:pointer;
+        background:${isTracked ? 'rgba(255,180,80,0.2)' : 'rgba(80,150,230,0.15)'};
+        color:${isTracked ? '#ffcc88' : '#9cccff'};
+        border:1px solid ${isTracked ? 'rgba(255,180,80,0.5)' : 'rgba(80,150,230,0.45)'};font-family:inherit;
+      `;
+      trackBtn.addEventListener('click', () => {
+        this._trackedMissionId = m.id;
+        if (this._onTrackMission) this._onTrackMission(m);
+        this._refresh();
+      });
+      actions.appendChild(trackBtn);
+
       const abandonBtn = document.createElement('button');
       abandonBtn.textContent = 'Abandon';
       abandonBtn.style.cssText = `

@@ -304,6 +304,7 @@ class Engine {
             if (this.waypointSystem && this.waypointSystem.missionId === mission.id) {
                 this.waypointSystem.clearWaypoint();
                 this.gameHUD.hideWaypoint();
+                if (this.guildUI) this.guildUI.setTrackedMissionId(null);
             }
         });
 
@@ -399,6 +400,13 @@ class Engine {
             onClose: () => {
                 if (this._gameStarted) this._resumeGame();
                 else this.mainMenu.show();
+            },
+            onTrackMission: (mission) => {
+                if (this.waypointSystem && mission) {
+                    this.waypointSystem.trackMission(mission);
+                    this.guildUI.setTrackedMissionId(mission.id);
+                    this.gameHUD.showToast(`Tracking: ${mission.title}`, '#ffcc66');
+                }
             },
         });
         this.worldMapUI.setCallbacks({
@@ -502,6 +510,8 @@ class Engine {
         if (d._guild) {
             this.guildSystem.deserialize(d._guild);
         }
+        // Re-bind UI to current guild system state
+        this.guildUI.setGuildSystem(this.guildSystem);
         if (d._quests) {
             this.questManager.deserialize(d._quests);
         }
@@ -583,6 +593,15 @@ class Engine {
         this.inventorySystem = new InventorySystem();
         this.guildSystem = new GuildSystem();
         this.questManager = new QuestManager();
+        this.guildUI.setGuildSystem(this.guildSystem);
+        this.guildUI.setTrackedMissionId(null);
+        this.guildSystem.setMissionCompleteCallback((mission) => {
+            if (this.waypointSystem && this.waypointSystem.missionId === mission.id) {
+                this.waypointSystem.clearWaypoint();
+                this.gameHUD.hideWaypoint();
+                if (this.guildUI) this.guildUI.setTrackedMissionId(null);
+            }
+        });
 
         // Init world generator for multiplayer (finite deterministic) mode
         if (gameMode === 'multiplayer') {
@@ -1137,15 +1156,28 @@ class Engine {
             },
         });
 
+        const playerPos = this.player.getPosition();
+
         // World chunks
-        this.worldManager.update(this.player.getPosition());
+        this.worldManager.update(playerPos);
+
+        // Gathering resources update + interaction prompt
+        const resourceData = this.worldGenerator
+            ? this.worldGenerator.getResourceNodesNear(playerPos.x, playerPos.z, this.gatheringSystem.spawnRadius)
+            : null;
+        this.gatheringSystem.update(dt, playerPos, resourceData);
+        const closestResource = this.gatheringSystem.getClosestNode(playerPos);
+        if (closestResource) {
+            this.gameHUD.showInteraction(`[E/F] Gather ${closestResource.data.label}`);
+        } else {
+            this.gameHUD.hideInteraction();
+        }
 
         // Animals AI
         if (this.animalAI) this.animalAI.update(dt);
 
         // Familiar wolves
         if (this.summonWolfManager && this.summonWolfManager.activeCount > 0) {
-            const playerPos = this.player.getPosition();
             const nearbyEnemies = this.animalAI
                 ? this.animalAI.getEnemiesInRadius(playerPos, 20)
                 : [];
@@ -1159,7 +1191,6 @@ class Engine {
         }
 
         // ── Zone tracking (finite world) ────────────────────
-        const playerPos = this.player.getPosition();
         const zone = getZoneAtPosition(playerPos.x, playerPos.z);
         if (zone && (!this._currentZone || this._currentZone.id !== zone.id)) {
             this._currentZone = zone;
@@ -1177,6 +1208,26 @@ class Engine {
                     if (q.rewards.exp) this.profile.addExp(q.rewards.exp);
                     if (q.rewards.gold && this.inventorySystem) this.inventorySystem.addGold(q.rewards.gold);
                 }
+            }
+        }
+
+        // ── Guild mission waypoint update ───────────────────
+        if (this.waypointSystem) {
+            const creatures = this.animalAI
+                ? this.animalAI.getEnemiesInRadius(playerPos, 500).map(e => ({
+                    type: e.brain ? e.brain.type : null,
+                    position: e.mesh ? e.mesh.position : (e.brain ? e.brain.position : null),
+                }))
+                : [];
+            const resources = this.gatheringSystem
+                ? this.gatheringSystem.getNodesOfType(null, playerPos, 500)
+                : [];
+
+            this.waypointSystem.update(dt, playerPos, { creatures, resources });
+            if (this.waypointSystem.active) {
+                this.gameHUD.showWaypoint(this.waypointSystem.getHUDText());
+            } else {
+                this.gameHUD.hideWaypoint();
             }
         }
 
