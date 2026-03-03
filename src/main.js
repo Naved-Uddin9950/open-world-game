@@ -114,8 +114,8 @@ class Engine {
         );
         this.gameScene.add(this.player.player);
 
-        // Start with a cleaner default perspective for exploration
-        this._cameraMode = CAMERA_MODE.THIRD_PERSON;
+        // Lock to first-person for now
+        this._cameraMode = CAMERA_MODE.FIRST_PERSON;
 
         // ── Player character mesh (visible in 3rd person) ───
         this._playerMesh = createPlayerCharacterMesh();
@@ -260,22 +260,7 @@ class Engine {
             }
         });
 
-        // ── Wire camera cycle (V key) ──────────────────────
-        this.player.setCycleCameraCallback(() => {
-            if (this.cameraController) {
-                const newMode = this.cameraController.cycleMode();
-                const modeName = this.cameraController.getModeName();
-                this._cameraMode = newMode;
-                this.gameHUD.showToast(`Camera: ${modeName}`, '#aaccff');
-                this.gameHUD.setCameraMode(modeName);
-                // Show/hide player mesh based on mode
-                if (this._playerMesh) {
-                    this._playerMesh.visible = (newMode !== CAMERA_MODE.FIRST_PERSON);
-                }
-                // Tell FP controller about new camera mode
-                this.player.setCameraMode(newMode);
-            }
-        });
+        // Camera mode switching is disabled for now (first-person only)
 
         // ── Wire mouse orbit & scroll zoom to camera controller ─
         this.player.setMouseInputCallback((dx, dy) => {
@@ -733,7 +718,7 @@ class Engine {
         }
 
         // ── Guild mission progress ──────────────────────────
-        if (this.guildSystem && this.guildSystem.data.joined) {
+        if (this.guildSystem?.data?.joined) {
             const completed = this.guildSystem.reportProgress(type, 1);
             for (const mission of completed) {
                 this.gameHUD.showToast(`Mission Complete: ${mission.title}! +${mission.gpReward} GP`, '#ffaa44');

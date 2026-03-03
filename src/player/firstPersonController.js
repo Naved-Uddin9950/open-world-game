@@ -192,9 +192,6 @@ export class FirstPersonController {
       case "KeyB":
         if (this._onOpenShop) this._onOpenShop();
         break;
-      case "KeyV":
-        if (this._onCycleCamera) this._onCycleCamera();
-        break;
       case "KeyQ":
         if (this._onOpenQuests) this._onOpenQuests();
         break;

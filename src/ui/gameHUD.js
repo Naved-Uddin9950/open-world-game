@@ -113,7 +113,7 @@ export class GameHUD {
       font-family:monospace;letter-spacing:0.04em;
       pointer-events:none;
     `;
-    this._cameraModeLabel.textContent = '\uD83C\uDFA5 First Person [V]';
+    this._cameraModeLabel.textContent = '\uD83C\uDFA5 First Person';
     el.appendChild(this._cameraModeLabel);
 
     // ── Interaction prompt (center screen) ──────────────
@@ -331,7 +331,7 @@ export class GameHUD {
   /** Update camera mode label. */
   setCameraMode(modeName) {
     if (this._cameraModeLabel) {
-      this._cameraModeLabel.textContent = `\uD83C\uDFA5 ${modeName} [V]`;
+      this._cameraModeLabel.textContent = `\uD83C\uDFA5 ${modeName}`;
     }
   }
 
