@@ -326,6 +326,7 @@ class Engine {
             onQuit: () => this._quitToMenu(),
             onProfile: () => { this.pauseMenu.hide(); this.profilePanel.show(); },
             onShop: () => { this.pauseMenu.hide(); this.shopUI.show(); },
+            onSwitchMode: () => { this._switchGameMode(); },
         });
 
         // Game Over callbacks
@@ -766,6 +767,57 @@ class Engine {
         this.saveSystem.hasSave().then(has => {
             this.mainMenu.setCanContinue(has && !this._gameOver);
         });
+    }
+
+    /** Toggle between singleplayer and multiplayer at runtime.
+     * Shared player/profile/skills persist across modes.
+     */
+    async _switchGameMode() {
+        const newMode = this._gameMode === 'singleplayer' ? 'multiplayer' : 'singleplayer';
+        // persist choice in profile
+        this.profile.data.gameMode = newMode;
+
+        if (newMode === 'multiplayer') {
+            // Ensure a deterministic seed exists
+            const seedStr = this.profile.data._worldSeed || (this.profile.data.name + '_' + Date.now());
+            this.profile.data._worldSeed = seedStr;
+            this.profile.save();
+
+            // Create deterministic world
+            this.worldSeedManager = new WorldSeedManager(seedStr);
+            this.worldGenerator = new WorldGenerator(this.worldSeedManager);
+            this.worldGenerator.generate();
+
+            // Recreate world manager with deterministic seed so chunk loader aligns
+            if (this.worldManager) this.worldManager.dispose();
+            this.worldManager = new WorldManager(this.gameScene.raw, this.player, this.assetLoader, this.worldSeedManager.seed);
+            this.player.setHeightProvider((x, z) => this.worldManager.getHeightAt(x, z));
+
+            // Move player to zone spawn if available
+            const rookieZone = ZONES.rookieTown;
+            if (rookieZone && rookieZone.spawnPoint) {
+                const sx = rookieZone.spawnPoint[0];
+                const sz = rookieZone.spawnPoint[1];
+                const sy = this.worldManager.getHeightAt(sx, sz);
+                this.player.player.position.set(sx, sy + 1.7, sz);
+            }
+        } else {
+            // Switch back to singleplayer procedural streaming world
+            if (this.worldGenerator && typeof this.worldGenerator.dispose === 'function') this.worldGenerator.dispose();
+            this.worldGenerator = null;
+            this.worldSeedManager = null;
+            if (this.worldManager) this.worldManager.dispose();
+            this.worldManager = new WorldManager(this.gameScene.raw, this.player, this.assetLoader);
+            this.player.setHeightProvider((x, z) => this.worldManager.getHeightAt(x, z));
+            // Keep player position where they are.
+        }
+
+        this._gameMode = newMode;
+        this.profile.data.gameMode = newMode;
+        this.profile.save();
+        this.gameHUD.showToast(`Mode switched: ${newMode}`, '#aaddaa');
+        // Force immediate world update
+        this.worldManager.update(this.player.getPosition());
     }
 
     _handleEscape() {

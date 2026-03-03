@@ -21,13 +21,14 @@ export class PauseMenu {
     this._saveStatus = null;
   }
 
-  setCallbacks({ onResume, onSave, onSettings, onQuit, onProfile, onShop }) {
+  setCallbacks({ onResume, onSave, onSettings, onQuit, onProfile, onShop, onSwitchMode }) {
     this._onResume = onResume;
     this._onSave = onSave;
     this._onSettings = onSettings;
     this._onQuit = onQuit;
     this._onProfile = onProfile;
     this._onShop = onShop;
+    this._onSwitchMode = onSwitchMode;
   }
 
   toggle() {
@@ -122,6 +123,12 @@ export class PauseMenu {
     // Settings
     btnContainer.appendChild(this._createButton('Settings', () => {
       if (this._onSettings) this._onSettings();
+    }));
+
+    // Switch Mode (singleplayer <-> multiplayer)
+    btnContainer.appendChild(this._createButton('Switch Mode', () => {
+      this.hide();
+      if (this._onSwitchMode) this._onSwitchMode();
     }));
 
     // Quit to Menu
