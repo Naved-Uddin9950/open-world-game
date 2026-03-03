@@ -19,9 +19,11 @@ export class PauseMenu {
     this._onSettings = null;
     this._onQuit = null;
     this._saveStatus = null;
+    this._gameMode = 'singleplayer';
+    this._switchModeBtn = null;
   }
 
-  setCallbacks({ onResume, onSave, onSettings, onQuit, onProfile, onShop, onSwitchMode }) {
+  setCallbacks({ onResume, onSave, onSettings, onQuit, onProfile, onShop, onSwitchMode, onQuests, onInventory, onGuild, onMap }) {
     this._onResume = onResume;
     this._onSave = onSave;
     this._onSettings = onSettings;
@@ -29,6 +31,15 @@ export class PauseMenu {
     this._onProfile = onProfile;
     this._onShop = onShop;
     this._onSwitchMode = onSwitchMode;
+    this._onQuests = onQuests;
+    this._onInventory = onInventory;
+    this._onGuild = onGuild;
+    this._onMap = onMap;
+  }
+
+  setGameMode(mode) {
+    this._gameMode = mode;
+    this._updateSwitchModeText();
   }
 
   toggle() {
@@ -120,16 +131,42 @@ export class PauseMenu {
       if (this._onShop) this._onShop();
     }));
 
+    // Quests
+    btnContainer.appendChild(this._createButton('Quests [Q]', () => {
+      this.hide();
+      if (this._onQuests) this._onQuests();
+    }));
+
+    // Inventory
+    btnContainer.appendChild(this._createButton('Inventory [I]', () => {
+      this.hide();
+      if (this._onInventory) this._onInventory();
+    }));
+
+    // Guild
+    btnContainer.appendChild(this._createButton('Guild [G]', () => {
+      this.hide();
+      if (this._onGuild) this._onGuild();
+    }));
+
+    // Map
+    btnContainer.appendChild(this._createButton('Map [M]', () => {
+      this.hide();
+      if (this._onMap) this._onMap();
+    }));
+
     // Settings
     btnContainer.appendChild(this._createButton('Settings', () => {
       if (this._onSettings) this._onSettings();
     }));
 
     // Switch Mode (singleplayer <-> multiplayer)
-    btnContainer.appendChild(this._createButton('Switch Mode', () => {
+    this._switchModeBtn = this._createButton('Switch Mode', () => {
       this.hide();
       if (this._onSwitchMode) this._onSwitchMode();
-    }));
+    });
+    btnContainer.appendChild(this._switchModeBtn);
+    this._updateSwitchModeText();
 
     // Quit to Menu
     btnContainer.appendChild(this._createButton('Quit to Menu', () => {
@@ -144,6 +181,13 @@ export class PauseMenu {
 
   _showSaveStatus(text) {
     if (this._saveStatus) this._saveStatus.textContent = text;
+  }
+
+  _updateSwitchModeText() {
+    if (!this._switchModeBtn) return;
+    const current = this._gameMode === 'singleplayer' ? 'Solo' : 'Multi';
+    const target = this._gameMode === 'singleplayer' ? 'Multiplayer' : 'Singleplayer';
+    this._switchModeBtn.textContent = `Switch to ${target} (${current})`;
   }
 
   _createButton(text, onClick) {

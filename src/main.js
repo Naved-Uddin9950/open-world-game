@@ -58,6 +58,10 @@ import { ProfilePanel } from './ui/profilePanel.js';
 import { SkillTreeUI } from './ui/skillTreeUI.js';
 import { ShopUI } from './ui/shopUI.js';
 import { GameHUD } from './ui/gameHUD.js';
+import { QuestUI } from './ui/questUI.js';
+import { InventoryUI } from './ui/inventoryUI.js';
+import { GuildUI } from './ui/guildUI.js';
+import { WorldMapUI } from './ui/worldMapUI.js';
 
 // ── EXP rewards per creature type ───────────────────────────
 // Legacy animal types kept for backward compat; new creatures auto-pull from creatureDatabase
@@ -220,6 +224,23 @@ class Engine {
         this.player.setOpenProfileCallback(() => this._toggleOverlay(this.profilePanel));
         this.player.setOpenSkillTreeCallback(() => this._toggleOverlay(this.skillTreeUI));
         this.player.setOpenShopCallback(() => this._toggleOverlay(this.shopUI));
+        this.player.setOpenQuestsCallback(() => this._toggleOverlay(this.questUI));
+        this.player.setOpenInventoryCallback(() => this._toggleOverlay(this.inventoryUI));
+        this.player.setOpenGuildCallback(() => this._toggleOverlay(this.guildUI));
+        this.player.setOpenMapCallback(() => {
+            if (!this._gameStarted || this._gameOver) return;
+            if (this.worldMapUI.isVisible()) {
+                this.worldMapUI.hide();
+                this._paused = false;
+                this.canvas.requestPointerLock();
+            } else {
+                this.profilePanel.hide(); this.skillTreeUI.hide(); this.shopUI.hide();
+                this.questUI.hide(); this.inventoryUI.hide(); this.guildUI.hide();
+                this._paused = true;
+                if (document.pointerLockElement) document.exitPointerLock();
+                this._showWorldMap();
+            }
+        });
 
         // ── Wire camera cycle (V key) ──────────────────────
         this.player.setCycleCameraCallback(() => {
@@ -257,6 +278,10 @@ class Engine {
         this.skillTreeUI = new SkillTreeUI();
         this.shopUI = new ShopUI();
         this.gameHUD = new GameHUD();
+        this.questUI = new QuestUI();
+        this.inventoryUI = new InventoryUI();
+        this.guildUI = new GuildUI();
+        this.worldMapUI = new WorldMapUI();
 
         // ── Wire profile to UIs ─────────────────────────────
         this.profilePanel.setProfile(this.profile);
@@ -266,6 +291,13 @@ class Engine {
         this.shopUI.setShopSystem(this.shopSystem);
         this.gameHUD.setProfile(this.profile);
         this.gameHUD.setSkillSystem(this.skillSystem);
+
+        // ── Wire new UIs to their backend systems ───────────
+        this.questUI.setQuestManager(this.questManager);
+        this.inventoryUI.setInventorySystem(this.inventorySystem);
+        this.inventoryUI.setProfile(this.profile);
+        this.guildUI.setGuildSystem(this.guildSystem);
+        this.worldMapUI.setGameMode(this._gameMode);
 
         // ── Settings panel callbacks ────────────────────────
         this.settingsPanel.setCallbacks({
@@ -308,6 +340,32 @@ class Engine {
             },
             onSkillChange: () => {
                 this._rebuildHUDSkillBar();
+            },
+        });
+
+        // New UI callbacks
+        this.questUI.setCallbacks({
+            onClose: () => {
+                if (this._gameStarted) this._resumeGame();
+                else this.mainMenu.show();
+            },
+        });
+        this.inventoryUI.setCallbacks({
+            onClose: () => {
+                if (this._gameStarted) this._resumeGame();
+                else this.mainMenu.show();
+            },
+        });
+        this.guildUI.setCallbacks({
+            onClose: () => {
+                if (this._gameStarted) this._resumeGame();
+                else this.mainMenu.show();
+            },
+        });
+        this.worldMapUI.setCallbacks({
+            onClose: () => {
+                if (this._gameStarted) this._resumeGame();
+                else this.mainMenu.show();
             },
         });
 
@@ -355,7 +413,12 @@ class Engine {
             onProfile: () => { this.pauseMenu.hide(); this.profilePanel.show(); },
             onShop: () => { this.pauseMenu.hide(); this.shopUI.show(); },
             onSwitchMode: () => { this._switchGameMode(); },
+            onQuests: () => { this.pauseMenu.hide(); this.questUI.show(); },
+            onInventory: () => { this.pauseMenu.hide(); this.inventoryUI.show(); },
+            onGuild: () => { this.pauseMenu.hide(); this.guildUI.show(); },
+            onMap: () => { this.pauseMenu.hide(); this._paused = true; if (document.pointerLockElement) document.exitPointerLock(); this._showWorldMap(); },
         });
+        this.pauseMenu.setGameMode(this._gameMode);
 
         // Game Over callbacks
         this.gameOverScreen.setCallbacks({
@@ -425,6 +488,11 @@ class Engine {
         this._rebuildHUDSkillBar();
         // Hide old HUD from firstPersonController
         this._hideOldHUD();
+        // Show quest tracker HUD
+        this.questUI.createTracker();
+        this.questUI.showTracker();
+        // Sync mode label to pause menu
+        this.pauseMenu.setGameMode(this._gameMode);
         this.canvas.requestPointerLock();
     }
 
@@ -509,6 +577,13 @@ class Engine {
         this.gameHUD.show();
         this._rebuildHUDSkillBar();
         this._hideOldHUD();
+        // Show quest tracker HUD
+        this.questUI.createTracker();
+        this.questUI.showTracker();
+        // Sync mode label to pause menu
+        this.pauseMenu.setGameMode(this._gameMode);
+        // Init guild mission board
+        this.guildSystem.refreshMissionBoard(5);
         this.canvas.requestPointerLock();
 
         this.gameHUD.showToast(`Welcome, ${name}! Your adventure begins.`, '#aaddaa');
@@ -746,7 +821,7 @@ class Engine {
         }
     }
 
-    /** Toggle overlay panels (profile, skill tree, shop). */
+    /** Toggle overlay panels (profile, skill tree, shop, quests, inventory, guild, map). */
     _toggleOverlay(panel) {
         if (!this._gameStarted || this._gameOver) return;
         if (panel.isVisible()) {
@@ -758,6 +833,10 @@ class Engine {
             this.profilePanel.hide();
             this.skillTreeUI.hide();
             this.shopUI.hide();
+            this.questUI.hide();
+            this.inventoryUI.hide();
+            this.guildUI.hide();
+            this.worldMapUI.hide();
             this._paused = true;
             if (document.pointerLockElement) document.exitPointerLock();
             panel.show();
@@ -802,8 +881,26 @@ class Engine {
         this.profilePanel.hide();
         this.skillTreeUI.hide();
         this.shopUI.hide();
+        this.questUI.hide();
+        this.inventoryUI.hide();
+        this.guildUI.hide();
+        this.worldMapUI.hide();
         this._paused = false;
         this.canvas.requestPointerLock();
+    }
+
+    /** Show world map with updated player position and discovered zones. */
+    _showWorldMap() {
+        const pos = this.player.getPosition();
+        this.worldMapUI.updatePlayerPos(pos.x, pos.z);
+        this.worldMapUI.setGameMode(this._gameMode);
+        // Always discover current zone
+        if (this._currentZone) {
+            this.worldMapUI.discoverZone(this._currentZone.id);
+        }
+        // Discover start zone
+        this.worldMapUI.discoverZone('rookieTown');
+        this.worldMapUI.show();
     }
 
     _quitToMenu() {
@@ -811,6 +908,7 @@ class Engine {
         this._paused = true;
         this._gameStarted = false;
         this.gameHUD.hide();
+        if (this.questUI) this.questUI.hideTracker();
         this._showMainMenu();
         this.saveSystem.hasSave().then(has => {
             this.mainMenu.setCanContinue(has && !this._gameOver);
@@ -873,6 +971,9 @@ class Engine {
         this.profile.data.gameMode = newMode;
         this.profile.save();
         this.gameHUD.showToast(`Mode switched: ${newMode}`, '#aaddaa');
+        // Update pause menu mode label
+        this.pauseMenu.setGameMode(newMode);
+        if (this.worldMapUI) this.worldMapUI.setGameMode(newMode);
         // Force immediate world update
         this.worldManager.update(this.player.getPosition());
         // Resume gameplay after switching
@@ -892,6 +993,10 @@ class Engine {
         if (this.profilePanel.isVisible()) { this.profilePanel.hide(); this._resumeGame(); return; }
         if (this.skillTreeUI.isVisible()) { this.skillTreeUI.hide(); this._resumeGame(); return; }
         if (this.shopUI.isVisible()) { this.shopUI.hide(); this._resumeGame(); return; }
+        if (this.questUI.isVisible()) { this.questUI.hide(); this._resumeGame(); return; }
+        if (this.inventoryUI.isVisible()) { this.inventoryUI.hide(); this._resumeGame(); return; }
+        if (this.guildUI.isVisible()) { this.guildUI.hide(); this._resumeGame(); return; }
+        if (this.worldMapUI.isVisible()) { this.worldMapUI.hide(); this._resumeGame(); return; }
 
         if (this.settingsPanel.isVisible()) {
             this.settingsPanel.hide();
@@ -1007,6 +1112,8 @@ class Engine {
         if (zone && (!this._currentZone || this._currentZone.id !== zone.id)) {
             this._currentZone = zone;
             this.gameHUD.showToast(`Entering: ${zone.name}`, '#aaddaa');
+            // Discover zone on the world map
+            if (this.worldMapUI) this.worldMapUI.discoverZone(zone.id);
         }
 
         // ── Quest explore checks ────────────────────────────
@@ -1047,6 +1154,9 @@ class Engine {
         // Update HUD
         this.gameHUD.update(this.player, this.effectSystem);
         this.gameHUD.updateSkillCooldowns();
+
+        // Update quest tracker HUD
+        if (this.questUI) this.questUI.updateTracker();
 
         // Profile play time
         if (this.profile) {

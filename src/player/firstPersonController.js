@@ -189,6 +189,18 @@ export class FirstPersonController {
       case "KeyV":
         if (this._onCycleCamera) this._onCycleCamera();
         break;
+      case "KeyQ":
+        if (this._onOpenQuests) this._onOpenQuests();
+        break;
+      case "KeyI":
+        if (this._onOpenInventory) this._onOpenInventory();
+        break;
+      case "KeyG":
+        if (this._onOpenGuild) this._onOpenGuild();
+        break;
+      case "KeyM":
+        if (this._onOpenMap) this._onOpenMap();
+        break;
     }
   }
 
@@ -341,6 +353,10 @@ export class FirstPersonController {
   setOpenSkillTreeCallback(fn) { this._onOpenSkillTree = fn; }
   setOpenShopCallback(fn) { this._onOpenShop = fn; }
   setCycleCameraCallback(fn) { this._onCycleCamera = fn; }
+  setOpenQuestsCallback(fn) { this._onOpenQuests = fn; }
+  setOpenInventoryCallback(fn) { this._onOpenInventory = fn; }
+  setOpenGuildCallback(fn) { this._onOpenGuild = fn; }
+  setOpenMapCallback(fn) { this._onOpenMap = fn; }
   setMouseInputCallback(fn) { this._onMouseInput = fn; }
   setScrollCallback(fn) { this._onScroll = fn; }
 

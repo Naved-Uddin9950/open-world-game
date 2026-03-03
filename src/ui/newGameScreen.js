@@ -10,6 +10,8 @@ import {
   createDefaultAppearance,
   randomizeAppearance,
 } from '../character/customizationSystem.js';
+import { createPlayerCharacterMesh, animatePlayerCharacter } from '../player/playerCharacterMesh.js';
+import * as THREE from 'three';
 
 /**
  * Full-screen character creation overlay with multi-step flow.
@@ -27,6 +29,13 @@ export class NewGameScreen {
     this._step = 0; // 0=basic, 1=appearance, 2=skill, 3=stats
     this._statPoints = 10;
     this._statAlloc = { strength: 0, agility: 0, vitality: 0, intelligence: 0, endurance: 0 };
+
+    // Mini Three.js preview (created on demand)
+    this._previewRenderer = null;
+    this._previewScene = null;
+    this._previewCamera = null;
+    this._previewMesh = null;
+    this._previewAnimId = null;
   }
 
   setCallbacks({ onConfirm, onBack }) {
@@ -45,8 +54,79 @@ export class NewGameScreen {
     if (document.pointerLockElement) document.exitPointerLock();
   }
 
-  hide() { if (this._el) this._el.style.display = 'none'; }
+  hide() {
+    if (this._el) this._el.style.display = 'none';
+    this._disposePreview();
+  }
   isVisible() { return this._el && this._el.style.display !== 'none'; }
+
+  _disposePreview() {
+    if (this._previewAnimId) { cancelAnimationFrame(this._previewAnimId); this._previewAnimId = null; }
+    if (this._previewRenderer) { this._previewRenderer.dispose(); this._previewRenderer = null; }
+    this._previewScene = null;
+    this._previewCamera = null;
+    this._previewMesh = null;
+  }
+
+  _createPreview(container) {
+    this._disposePreview();
+
+    const w = 200, h = 280;
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x000000, 0);
+    container.appendChild(renderer.domElement);
+    renderer.domElement.style.cssText = 'display:block;margin:0 auto;border:1px solid rgba(255,255,255,0.08);background:rgba(20,25,20,0.6);';
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(35, w / h, 0.1, 50);
+    camera.position.set(0, 1.0, 3.5);
+    camera.lookAt(0, 0.8, 0);
+
+    // Lighting
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(2, 4, 3);
+    scene.add(dirLight);
+
+    // Floor disc
+    const floor = new THREE.Mesh(
+      new THREE.CircleGeometry(0.6, 32),
+      new THREE.MeshLambertMaterial({ color: 0x333333 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    scene.add(floor);
+
+    // Humanoid mesh
+    const mesh = createPlayerCharacterMesh(this._appearance);
+    scene.add(mesh);
+
+    this._previewRenderer = renderer;
+    this._previewScene = scene;
+    this._previewCamera = camera;
+    this._previewMesh = mesh;
+
+    // Auto-rotate and idle animation
+    let time = 0;
+    const animate = () => {
+      this._previewAnimId = requestAnimationFrame(animate);
+      time += 0.016;
+      if (this._previewMesh) {
+        this._previewMesh.rotation.y += 0.008;
+        animatePlayerCharacter(this._previewMesh, 0.016, false, false);
+      }
+      renderer.render(scene, camera);
+    };
+    animate();
+  }
+
+  _updatePreview() {
+    if (!this._previewScene || !this._previewMesh) return;
+    this._previewScene.remove(this._previewMesh);
+    this._previewMesh = createPlayerCharacterMesh(this._appearance);
+    this._previewScene.add(this._previewMesh);
+  }
 
   // ════════════════════════════════════════════════════════
   // Build DOM
@@ -151,15 +231,25 @@ export class NewGameScreen {
     box.appendChild(this._title('CUSTOMIZE APPEARANCE'));
     box.appendChild(this._stepIndicator(1));
 
+    // ── 3D Character Preview ──────────────────────────────
+    const previewContainer = document.createElement('div');
+    previewContainer.style.cssText = 'margin-bottom:16px;';
+    box.appendChild(previewContainer);
+    // Deferred so DOM is ready
+    setTimeout(() => this._createPreview(previewContainer), 0);
+
     const opts = CUSTOMIZATION_OPTIONS;
+
+    // Helper to update preview after any change
+    const refreshPreview = () => setTimeout(() => this._updatePreview(), 0);
 
     // Gender
     box.appendChild(this._optionRow('Gender', opts.gender, this._appearance.gender,
-      (v) => { this._appearance.gender = v; }));
+      (v) => { this._appearance.gender = v; refreshPreview(); }));
 
     // Body type
     box.appendChild(this._optionRow('Body Type', opts.bodyType, this._appearance.bodyType,
-      (v) => { this._appearance.bodyType = v; }));
+      (v) => { this._appearance.bodyType = v; refreshPreview(); }));
 
     // Height slider
     box.appendChild(this._label(`Height: ${this._appearance.height} cm`));
@@ -172,44 +262,45 @@ export class NewGameScreen {
     heightSlider.addEventListener('input', () => {
       this._appearance.height = parseInt(heightSlider.value);
       heightSlider.previousElementSibling.textContent = `Height: ${this._appearance.height} cm`;
+      refreshPreview();
     });
     box.appendChild(heightSlider);
 
     // Skin color
     box.appendChild(this._colorRow('Skin Color', opts.skinColor, this._appearance.skinColor,
-      (v) => { this._appearance.skinColor = v; }));
+      (v) => { this._appearance.skinColor = v; refreshPreview(); }));
 
     // Hair style
     box.appendChild(this._optionRow('Hair Style', opts.hairStyle.map(h => h.id), this._appearance.hairStyle,
-      (v) => { this._appearance.hairStyle = v; }));
+      (v) => { this._appearance.hairStyle = v; refreshPreview(); }));
 
     // Hair color
     box.appendChild(this._colorRow('Hair Color', opts.hairColor, this._appearance.hairColor,
-      (v) => { this._appearance.hairColor = v; }));
+      (v) => { this._appearance.hairColor = v; refreshPreview(); }));
 
     // Eye color
     box.appendChild(this._colorRow('Eye Color', opts.eyeColor, this._appearance.eyeColor,
-      (v) => { this._appearance.eyeColor = v; }));
+      (v) => { this._appearance.eyeColor = v; refreshPreview(); }));
 
     // Facial hair (only if male)
     if (this._appearance.gender === 'male') {
       box.appendChild(this._optionRow('Facial Hair', opts.facialHair.map(f => f.id), this._appearance.facialHair,
-        (v) => { this._appearance.facialHair = v; }));
+        (v) => { this._appearance.facialHair = v; refreshPreview(); }));
     }
 
     // Clothing
     box.appendChild(this._optionRow('Upper', opts.upperClothing.map(c => c.id), this._appearance.upperClothing,
-      (v) => { this._appearance.upperClothing = v; }));
+      (v) => { this._appearance.upperClothing = v; refreshPreview(); }));
     box.appendChild(this._optionRow('Lower', opts.lowerClothing.map(c => c.id), this._appearance.lowerClothing,
-      (v) => { this._appearance.lowerClothing = v; }));
+      (v) => { this._appearance.lowerClothing = v; refreshPreview(); }));
     box.appendChild(this._optionRow('Shoes', opts.shoes.map(c => c.id), this._appearance.shoes,
-      (v) => { this._appearance.shoes = v; }));
+      (v) => { this._appearance.shoes = v; refreshPreview(); }));
 
     // Accessories
     box.appendChild(this._optionRow('Accessory', opts.accessories.map(a => a.id), this._appearance.accessory,
-      (v) => { this._appearance.accessory = v; }));
+      (v) => { this._appearance.accessory = v; refreshPreview(); }));
     box.appendChild(this._optionRow('Glasses', opts.glasses.map(g => g.id), this._appearance.glasses,
-      (v) => { this._appearance.glasses = v; }));
+      (v) => { this._appearance.glasses = v; refreshPreview(); }));
 
     // Randomize button
     const randBtn = this._btn('Randomize', () => {

@@ -96,6 +96,10 @@ export class ProfilePanel {
 
     c.appendChild(this._divider());
 
+    // ── Stats Radar Chart ─────────────────────────────────
+    c.appendChild(this._buildRadarChart(d));
+    c.appendChild(this._divider());
+
     // Stats with enhance buttons
     const stats = [
       { key: 'health', label: 'Health', val: `${d.health} / ${d.maxHealth}` },
@@ -155,6 +159,109 @@ export class ProfilePanel {
       row.appendChild(lbl);
       c.appendChild(row);
     }
+  }
+
+  _buildRadarChart(d) {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'text-align:center;margin-bottom:8px;';
+
+    const label = document.createElement('div');
+    label.style.cssText = 'color:#999;font-size:0.7rem;letter-spacing:0.1em;margin-bottom:6px;';
+    label.textContent = 'STAT OVERVIEW';
+    wrap.appendChild(label);
+
+    const canvas = document.createElement('canvas');
+    const size = 240;
+    canvas.width = size;
+    canvas.height = size;
+    canvas.style.cssText = 'display:block;margin:0 auto;';
+    wrap.appendChild(canvas);
+
+    const ctx = canvas.getContext('2d');
+    const cx = size / 2;
+    const cy = size / 2;
+    const radius = size * 0.38;
+
+    const stats = [
+      { label: 'STR', value: d.strength || 10, color: '#ff6644' },
+      { label: 'DEF', value: d.defence || 10, color: '#4488ff' },
+      { label: 'AGI', value: d.agility || 10, color: '#44ccff' },
+      { label: 'VIT', value: d.vitality || 10, color: '#44ff88' },
+      { label: 'INT', value: d.intelligence || 10, color: '#aa88ff' },
+      { label: 'END', value: d.endurance || 10, color: '#ffaa44' },
+    ];
+    const n = stats.length;
+    const maxVal = Math.max(100, ...stats.map(s => s.value));
+    const angleStep = (Math.PI * 2) / n;
+
+    // Background rings
+    for (let ring = 1; ring <= 4; ring++) {
+      const r = (radius * ring) / 4;
+      ctx.beginPath();
+      for (let i = 0; i <= n; i++) {
+        const a = -Math.PI / 2 + i * angleStep;
+        const x = cx + r * Math.cos(a);
+        const y = cy + r * Math.sin(a);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.stroke();
+    }
+
+    // Axis lines
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + i * angleStep;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + radius * Math.cos(a), cy + radius * Math.sin(a));
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.stroke();
+    }
+
+    // Stat polygon
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + i * angleStep;
+      const r = (stats[i].value / maxVal) * radius;
+      const x = cx + r * Math.cos(a);
+      const y = cy + r * Math.sin(a);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(100,200,100,0.2)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(100,200,100,0.7)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.lineWidth = 1;
+
+    // Stat dots + labels
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + i * angleStep;
+      const r = (stats[i].value / maxVal) * radius;
+      const x = cx + r * Math.cos(a);
+      const y = cy + r * Math.sin(a);
+
+      // Dot
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = stats[i].color;
+      ctx.fill();
+
+      // Label
+      const lx = cx + (radius + 16) * Math.cos(a);
+      const ly = cy + (radius + 16) * Math.sin(a);
+      ctx.font = '10px monospace';
+      ctx.fillStyle = stats[i].color;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${stats[i].label} ${stats[i].value}`, lx, ly);
+    }
+
+    return wrap;
   }
 
   _row(label, value) {
