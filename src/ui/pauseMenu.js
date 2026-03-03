@@ -75,22 +75,38 @@ export class PauseMenu {
     el.style.cssText = `
       position: fixed; inset: 0; z-index: 2500;
       display: none; flex-direction: column; align-items: center; justify-content: center;
-      background: rgba(0, 0, 0, 0.75);
+      background: radial-gradient(circle at 50% 30%, rgba(20,28,20,0.78), rgba(0,0,0,0.88));
       font-family: 'Segoe UI', system-ui, sans-serif;
-      backdrop-filter: blur(4px);
+      backdrop-filter: blur(6px);
+    `;
+
+    const panel = document.createElement('div');
+    panel.style.cssText = `
+      width: 360px; max-width: calc(100vw - 32px);
+      background: rgba(16, 22, 16, 0.82);
+      border: 1px solid rgba(130, 190, 130, 0.22);
+      border-radius: 10px;
+      box-shadow: 0 14px 30px rgba(0,0,0,0.45);
+      padding: 22px 18px 18px;
+      display: flex; flex-direction: column; align-items: center;
     `;
 
     const title = document.createElement('h2');
     title.textContent = 'PAUSED';
     title.style.cssText = `
-      color: #ffffff; font-size: 2.2rem; font-weight: 200;
+      color: #e8efe8; font-size: 2.1rem; font-weight: 250;
       letter-spacing: 0.15em; text-transform: uppercase;
-      margin-bottom: 2rem;
+      margin: 0 0 8px 0;
     `;
-    el.appendChild(title);
+    panel.appendChild(title);
+
+    const subtitle = document.createElement('div');
+    subtitle.textContent = 'Game paused — choose an option';
+    subtitle.style.cssText = 'color:#95a595;font-size:0.75rem;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:14px;';
+    panel.appendChild(subtitle);
 
     const btnContainer = document.createElement('div');
-    btnContainer.style.cssText = 'display:flex;flex-direction:column;gap:10px;align-items:center;';
+    btnContainer.style.cssText = 'display:flex;flex-direction:column;gap:8px;align-items:center;width:100%;';
 
     // Resume
     btnContainer.appendChild(this._createButton('Resume', () => {
@@ -116,7 +132,7 @@ export class PauseMenu {
 
     // Save status text
     this._saveStatus = document.createElement('div');
-    this._saveStatus.style.cssText = 'color: #88ff88; font-size: 0.85rem; height: 20px; margin-top: -5px;';
+    this._saveStatus.style.cssText = 'color: #9cdf9c; font-size: 0.78rem; height: 18px; margin: -2px 0 2px; letter-spacing:0.02em;';
     btnContainer.appendChild(this._saveStatus);
 
     // Profile
@@ -174,7 +190,8 @@ export class PauseMenu {
       if (this._onQuit) this._onQuit();
     }));
 
-    el.appendChild(btnContainer);
+    panel.appendChild(btnContainer);
+    el.appendChild(panel);
     document.body.appendChild(el);
     this._el = el;
   }
@@ -194,21 +211,24 @@ export class PauseMenu {
     const btn = document.createElement('button');
     btn.textContent = text;
     btn.style.cssText = `
-      width: 200px; padding: 12px 0; font-size: 1rem;
-      cursor: pointer; background: transparent;
-      color: #cccccc; border: 1px solid rgba(255,255,255,0.2);
+      width: 100%; padding: 11px 12px; font-size: 0.97rem;
+      cursor: pointer; background: rgba(18, 24, 18, 0.72);
+      color: #c9d2c9; border: 1px solid rgba(150,190,150,0.18);
+      border-radius: 6px;
       letter-spacing: 0.08em; text-transform: uppercase;
-      transition: all 0.3s ease; font-family: inherit;
+      transition: all 0.22s ease; font-family: inherit;
     `;
     btn.addEventListener('mouseenter', () => {
-      btn.style.background = 'rgba(255,255,255,0.1)';
-      btn.style.color = '#ffffff';
-      btn.style.borderColor = 'rgba(255,255,255,0.5)';
+      btn.style.background = 'rgba(70,120,70,0.22)';
+      btn.style.color = '#f0fff0';
+      btn.style.borderColor = 'rgba(140,220,140,0.45)';
+      btn.style.transform = 'translateY(-1px)';
     });
     btn.addEventListener('mouseleave', () => {
-      btn.style.background = 'transparent';
-      btn.style.color = '#cccccc';
-      btn.style.borderColor = 'rgba(255,255,255,0.2)';
+      btn.style.background = 'rgba(18, 24, 18, 0.72)';
+      btn.style.color = '#c9d2c9';
+      btn.style.borderColor = 'rgba(150,190,150,0.18)';
+      btn.style.transform = 'translateY(0)';
     });
     btn.addEventListener('click', onClick);
     return btn;

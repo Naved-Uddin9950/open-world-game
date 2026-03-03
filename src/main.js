@@ -114,6 +114,9 @@ class Engine {
         );
         this.gameScene.add(this.player.player);
 
+        // Start with a cleaner default perspective for exploration
+        this._cameraMode = CAMERA_MODE.THIRD_PERSON;
+
         // ── Player character mesh (visible in 3rd person) ───
         this._playerMesh = createPlayerCharacterMesh();
         this._playerMesh.visible = (this._cameraMode !== CAMERA_MODE.FIRST_PERSON);
@@ -144,8 +147,8 @@ class Engine {
         this.questManager = new QuestManager();
 
         // ── Camera Controller (multi-mode) ──────────────────
-        this.cameraController = new CameraController(this.gameCamera.raw);
-        this._cameraMode = CAMERA_MODE.FIRST_PERSON;
+        this.cameraController = new CameraController(this.gameCamera.raw, this._cameraMode);
+        this.player.setCameraMode(this._cameraMode);
 
         // ── Game Mode & World Gen ───────────────────────────
         this._gameMode = 'singleplayer'; // or 'multiplayer'
@@ -174,6 +177,7 @@ class Engine {
 
         // ── Terrain height provider ─────────────────────────
         this.player.setHeightProvider((x, z) => this.worldManager.getHeightAt(x, z));
+        this.cameraController.setHeightProvider((x, z) => this.worldManager.getHeightAt(x, z));
 
         // ── Initial world load ──────────────────────────────
         this.worldManager.update(this.player.getPosition());

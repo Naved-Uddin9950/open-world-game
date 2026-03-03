@@ -34,15 +34,15 @@ const MODE_CONFIG = {
     zoomable: false,
   },
   [CAMERA_MODE.THIRD_PERSON]: {
-    offset: new THREE.Vector3(0, 2.5, -4),
-    followDist: 4,
-    lookAtOffset: new THREE.Vector3(0, 1.2, 0),
-    fov: 65,
-    minPitch: -0.3,
-    maxPitch: 1.2,
+    offset: new THREE.Vector3(0.6, 2.2, -5.2),
+    followDist: 5.2,
+    lookAtOffset: new THREE.Vector3(0, 1.45, 0),
+    fov: 68,
+    minPitch: -0.15,
+    maxPitch: 1.15,
     zoomable: true,
-    minZoom: 2,
-    maxZoom: 10,
+    minZoom: 2.8,
+    maxZoom: 12,
   },
   [CAMERA_MODE.TOP_DOWN]: {
     offset: new THREE.Vector3(0, 20, -5),
@@ -56,9 +56,9 @@ const MODE_CONFIG = {
     maxZoom: 40,
   },
   [CAMERA_MODE.DYNAMIC_COMBAT]: {
-    offset: new THREE.Vector3(1.5, 2.0, -3.5),
-    followDist: 3.5,
-    lookAtOffset: new THREE.Vector3(0, 1.3, 0),
+    offset: new THREE.Vector3(1.2, 2.2, -4.2),
+    followDist: 4.2,
+    lookAtOffset: new THREE.Vector3(0, 1.4, 0),
     fov: 70,
     minPitch: -0.5,
     maxPitch: 1.0,
@@ -81,6 +81,7 @@ export class CameraController {
     this._targetPos = new THREE.Vector3();
     this._currentLookAt = new THREE.Vector3();
     this._targetLookAt = new THREE.Vector3();
+    this._initialized = false;
 
     // Orbit angles (for third-person / top-down)
     this._yaw = 0;
@@ -101,6 +102,9 @@ export class CameraController {
     // Collision avoidance
     this._raycaster = new THREE.Raycaster();
     this._collisionLayers = [];
+
+    // Terrain / world height provider used to avoid underground camera angles
+    this._getHeightAt = null;
   }
 
   get mode() { return this._mode; }
@@ -111,6 +115,14 @@ export class CameraController {
    */
   setCollisionMeshes(meshes) {
     this._collisionLayers = meshes;
+  }
+
+  /**
+   * Set terrain/world height provider for camera grounding.
+   * @param {(x:number, z:number) => number} fn
+   */
+  setHeightProvider(fn) {
+    this._getHeightAt = fn;
   }
 
   /**
@@ -211,12 +223,26 @@ export class CameraController {
       const y = Math.sin(this._pitch) * dist;
       const z = Math.cos(this._yaw) * Math.cos(this._pitch) * dist;
 
+      // Shoulder bias in camera-right direction for less body occlusion
+      const shoulder = cfg.offset?.x || 0;
+      const rightX = Math.cos(this._yaw);
+      const rightZ = -Math.sin(this._yaw);
+
       this._targetPos.set(
-        playerPos.x + x,
+        playerPos.x + x + rightX * shoulder,
         playerPos.y + y,
-        playerPos.z + z,
+        playerPos.z + z + rightZ * shoulder,
       );
       this._targetLookAt.copy(playerPos).add(cfg.lookAtOffset);
+    }
+
+    // Keep non-first-person camera above world surface when possible
+    if (this._mode !== CAMERA_MODE.FIRST_PERSON && this._getHeightAt) {
+      const groundY = this._getHeightAt(this._targetPos.x, this._targetPos.z);
+      const minCamY = groundY + 0.45;
+      if (Number.isFinite(minCamY)) {
+        this._targetPos.y = Math.max(this._targetPos.y, minCamY);
+      }
     }
 
     // ── Collision avoidance ────────────────────────────────
@@ -229,12 +255,16 @@ export class CameraController {
       const hits = this._raycaster.intersectObjects(this._collisionLayers, true);
       if (hits.length > 0 && hits[0].distance < maxDist) {
         // Pull camera closer
-        this._targetPos.copy(this._targetLookAt).add(dir.multiplyScalar(hits[0].distance * 0.9));
+        this._targetPos.copy(this._targetLookAt).add(dir.multiplyScalar(Math.max(1.2, hits[0].distance * 0.88)));
       }
     }
 
     // ── Smooth interpolation ──────────────────────────────
-    if (this._transitioning) {
+    if (!this._initialized) {
+      this._currentPos.copy(this._targetPos);
+      this._currentLookAt.copy(this._targetLookAt);
+      this._initialized = true;
+    } else if (this._transitioning) {
       this._transitionTime += dt;
       const t = Math.min(1, this._transitionTime / this._transitionDuration);
       const ease = t * t * (3 - 2 * t); // smoothstep

@@ -36,6 +36,7 @@ export class NewGameScreen {
     this._previewCamera = null;
     this._previewMesh = null;
     this._previewAnimId = null;
+    this._previewDisposers = [];
   }
 
   setCallbacks({ onConfirm, onBack }) {
@@ -62,6 +63,10 @@ export class NewGameScreen {
 
   _disposePreview() {
     if (this._previewAnimId) { cancelAnimationFrame(this._previewAnimId); this._previewAnimId = null; }
+    if (this._previewDisposers && this._previewDisposers.length) {
+      for (const fn of this._previewDisposers) fn();
+      this._previewDisposers = [];
+    }
     if (this._previewRenderer) { this._previewRenderer.dispose(); this._previewRenderer = null; }
     this._previewScene = null;
     this._previewCamera = null;
@@ -71,31 +76,35 @@ export class NewGameScreen {
   _createPreview(container) {
     this._disposePreview();
 
-    const w = 200, h = 280;
+    const w = 320, h = 360;
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(w, h);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x000000, 0);
     container.appendChild(renderer.domElement);
-    renderer.domElement.style.cssText = 'display:block;margin:0 auto;border:1px solid rgba(255,255,255,0.08);background:rgba(20,25,20,0.6);';
+    renderer.domElement.style.cssText = 'display:block;margin:0 auto;border:1px solid rgba(120,190,120,0.2);border-radius:8px;background:radial-gradient(circle at 50% 35%,rgba(38,52,38,0.85),rgba(16,20,16,0.88));cursor:grab;';
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(35, w / h, 0.1, 50);
-    camera.position.set(0, 1.0, 3.5);
-    camera.lookAt(0, 0.8, 0);
+    camera.position.set(0, 1.1, 2.2);
+    camera.lookAt(0, 1.0, 0);
 
     // Lighting
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(2, 4, 3);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.72));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    dirLight.position.set(2.2, 4.4, 2.8);
     scene.add(dirLight);
+    const rimLight = new THREE.DirectionalLight(0x88aaff, 0.42);
+    rimLight.position.set(-2, 2, -3);
+    scene.add(rimLight);
 
     // Floor disc
     const floor = new THREE.Mesh(
-      new THREE.CircleGeometry(0.6, 32),
-      new THREE.MeshLambertMaterial({ color: 0x333333 })
+      new THREE.CircleGeometry(0.72, 36),
+      new THREE.MeshLambertMaterial({ color: 0x2a2f2a })
     );
     floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -0.01;
     scene.add(floor);
 
     // Humanoid mesh
@@ -108,13 +117,67 @@ export class NewGameScreen {
     this._previewCamera = camera;
     this._previewMesh = mesh;
 
+    // Orbit controls (drag + wheel) without external deps
+    const orbit = { yaw: 0, pitch: 0.22, radius: 2.1, targetY: 1.02 };
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+    let lastInteractAt = performance.now();
+
+    const onDown = (e) => {
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      renderer.domElement.style.cursor = 'grabbing';
+      lastInteractAt = performance.now();
+    };
+    const onMove = (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      orbit.yaw -= dx * 0.01;
+      orbit.pitch = Math.max(-0.1, Math.min(0.85, orbit.pitch - dy * 0.008));
+      lastInteractAt = performance.now();
+    };
+    const onUp = () => {
+      dragging = false;
+      renderer.domElement.style.cursor = 'grab';
+      lastInteractAt = performance.now();
+    };
+    const onWheel = (e) => {
+      e.preventDefault();
+      orbit.radius = Math.max(1.5, Math.min(2.8, orbit.radius + e.deltaY * 0.0025));
+      lastInteractAt = performance.now();
+    };
+
+    renderer.domElement.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
+    this._previewDisposers.push(() => renderer.domElement.removeEventListener('pointerdown', onDown));
+    this._previewDisposers.push(() => window.removeEventListener('pointermove', onMove));
+    this._previewDisposers.push(() => window.removeEventListener('pointerup', onUp));
+    this._previewDisposers.push(() => renderer.domElement.removeEventListener('wheel', onWheel));
+
     // Auto-rotate and idle animation
-    let time = 0;
     const animate = () => {
       this._previewAnimId = requestAnimationFrame(animate);
-      time += 0.016;
+      const idleMs = performance.now() - lastInteractAt;
+      if (!dragging && idleMs > 1600) {
+        orbit.yaw += 0.0032;
+      }
+
+      const cp = Math.cos(orbit.pitch);
+      camera.position.set(
+        Math.sin(orbit.yaw) * cp * orbit.radius,
+        orbit.targetY + Math.sin(orbit.pitch) * orbit.radius,
+        Math.cos(orbit.yaw) * cp * orbit.radius,
+      );
+      camera.lookAt(0, orbit.targetY, 0);
+
       if (this._previewMesh) {
-        this._previewMesh.rotation.y += 0.008;
         animatePlayerCharacter(this._previewMesh, 0.016, false, false);
       }
       renderer.render(scene, camera);
@@ -147,9 +210,9 @@ export class NewGameScreen {
 
     this._box = document.createElement('div');
     this._box.style.cssText = `
-      background:rgba(30,30,30,0.95);border:1px solid rgba(255,255,255,0.1);
-      border-radius:8px;padding:28px 36px;min-width:420px;max-width:540px;
-      max-height:88vh;overflow-y:auto;
+      background:rgba(26,28,26,0.96);border:1px solid rgba(130,190,130,0.18);
+      border-radius:10px;padding:28px 34px;min-width:460px;max-width:620px;
+      max-height:88vh;overflow-y:auto;box-shadow:0 12px 32px rgba(0,0,0,0.38);
     `;
 
     el.appendChild(this._box);
@@ -235,7 +298,7 @@ export class NewGameScreen {
 
     // ── 3D Character Preview ──────────────────────────────
     const previewContainer = document.createElement('div');
-    previewContainer.style.cssText = 'margin-bottom:16px;';
+    previewContainer.style.cssText = 'margin-bottom:18px;display:flex;justify-content:center;';
     box.appendChild(previewContainer);
     // Deferred so DOM is ready
     setTimeout(() => this._createPreview(previewContainer), 0);

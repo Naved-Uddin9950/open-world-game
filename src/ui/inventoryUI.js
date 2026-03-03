@@ -40,15 +40,15 @@ export class InventoryUI {
     el.style.cssText = `
       position:fixed;inset:0;z-index:2800;display:none;
       flex-direction:column;align-items:center;justify-content:center;
-      background:rgba(0,0,0,0.88);font-family:'Segoe UI',system-ui,sans-serif;
-      backdrop-filter:blur(4px);
+      background:radial-gradient(circle at 50% 28%,rgba(18,28,18,0.74),rgba(0,0,0,0.9));
+      font-family:'Segoe UI',system-ui,sans-serif;backdrop-filter:blur(6px);
     `;
 
     const box = document.createElement('div');
     box.style.cssText = `
-      background:rgba(30,30,30,0.95);border:1px solid rgba(255,255,255,0.1);
-      border-radius:8px;padding:24px 32px;min-width:520px;max-width:640px;
-      max-height:82vh;overflow-y:auto;
+      background:rgba(24,28,24,0.96);border:1px solid rgba(130,190,130,0.2);
+      border-radius:10px;padding:20px 22px 18px;min-width:560px;max-width:740px;
+      max-height:84vh;overflow-y:auto;box-shadow:0 14px 34px rgba(0,0,0,0.45);
     `;
     this._box = box;
 
@@ -57,10 +57,10 @@ export class InventoryUI {
     header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;';
     const title = document.createElement('h2');
     title.textContent = 'INVENTORY';
-    title.style.cssText = 'color:#aaddaa;font-size:1.2rem;font-weight:300;letter-spacing:0.12em;margin:0;';
+    title.style.cssText = 'color:#cfe8cf;font-size:1.25rem;font-weight:300;letter-spacing:0.12em;margin:0;';
     header.appendChild(title);
     this._goldLabel = document.createElement('div');
-    this._goldLabel.style.cssText = 'color:#ffdd44;font-size:0.9rem;font-family:monospace;';
+    this._goldLabel.style.cssText = 'color:#ffd96a;font-size:0.9rem;font-family:monospace;background:rgba(255,210,100,0.08);padding:4px 8px;border:1px solid rgba(255,210,100,0.22);border-radius:6px;';
     header.appendChild(this._goldLabel);
     box.appendChild(header);
 
@@ -76,24 +76,32 @@ export class InventoryUI {
 
     // Item grid
     this._itemGrid = document.createElement('div');
-    this._itemGrid.style.cssText = 'display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:14px;';
+    this._itemGrid.style.cssText = 'display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:14px;';
     box.appendChild(this._itemGrid);
 
     // Item detail
     this._detailBox = document.createElement('div');
-    this._detailBox.style.cssText = 'background:rgba(40,40,40,0.8);border:1px solid rgba(255,255,255,0.08);padding:12px;display:none;margin-bottom:14px;';
+    this._detailBox.style.cssText = 'background:rgba(36,42,36,0.9);border:1px solid rgba(130,190,130,0.2);border-radius:8px;padding:12px;display:none;margin-bottom:14px;';
     box.appendChild(this._detailBox);
 
     // Close
     const closeBtn = document.createElement('button');
     closeBtn.textContent = 'Close [I]';
     closeBtn.style.cssText = `
-      display:block;margin:0 auto;padding:10px 36px;font-size:0.9rem;
-      cursor:pointer;background:transparent;color:#aaa;border:1px solid rgba(255,255,255,0.2);
-      letter-spacing:0.08em;text-transform:uppercase;transition:all 0.2s;font-family:inherit;
+      display:block;margin:2px auto 0;padding:10px 36px;font-size:0.9rem;
+      cursor:pointer;background:rgba(18,24,18,0.75);color:#c5d0c5;border:1px solid rgba(140,190,140,0.24);
+      border-radius:6px;letter-spacing:0.08em;text-transform:uppercase;transition:all 0.2s;font-family:inherit;
     `;
-    closeBtn.addEventListener('mouseenter', () => { closeBtn.style.color = '#fff'; });
-    closeBtn.addEventListener('mouseleave', () => { closeBtn.style.color = '#aaa'; });
+    closeBtn.addEventListener('mouseenter', () => {
+      closeBtn.style.color = '#f1fff1';
+      closeBtn.style.borderColor = 'rgba(140,220,140,0.45)';
+      closeBtn.style.background = 'rgba(70,120,70,0.2)';
+    });
+    closeBtn.addEventListener('mouseleave', () => {
+      closeBtn.style.color = '#c5d0c5';
+      closeBtn.style.borderColor = 'rgba(140,190,140,0.24)';
+      closeBtn.style.background = 'rgba(18,24,18,0.75)';
+    });
     closeBtn.addEventListener('click', () => { this.hide(); if (this._onClose) this._onClose(); });
     box.appendChild(closeBtn);
 
@@ -117,10 +125,10 @@ export class InventoryUI {
       const active = cat === this._currentTab;
       btn.textContent = cat.charAt(0).toUpperCase() + cat.slice(1);
       btn.style.cssText = `
-        padding:4px 12px;font-size:0.7rem;cursor:pointer;
-        background:${active ? 'rgba(100,200,100,0.2)' : 'transparent'};
-        color:${active ? '#88ff88' : '#888'};
-        border:1px solid ${active ? 'rgba(100,200,100,0.4)' : 'rgba(255,255,255,0.1)'};
+        padding:5px 12px;font-size:0.72rem;cursor:pointer;border-radius:6px;
+        background:${active ? 'rgba(100,200,100,0.22)' : 'rgba(25,30,25,0.7)'};
+        color:${active ? '#adffad' : '#93a093'};
+        border:1px solid ${active ? 'rgba(100,200,100,0.45)' : 'rgba(255,255,255,0.1)'};
         font-family:inherit;
       `;
       btn.addEventListener('click', () => { this._currentTab = cat; this._refresh(); });
@@ -134,17 +142,18 @@ export class InventoryUI {
     equipTitle.textContent = 'EQUIPPED';
     this._equipSection.appendChild(equipTitle);
     const equipGrid = document.createElement('div');
-    equipGrid.style.cssText = 'display:flex;gap:6px;';
+    equipGrid.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;';
     const slots = ['weapon', 'head', 'chest', 'legs', 'feet', 'accessory'];
     const equipped = (inv.data && inv.data.equipped) ? inv.data.equipped : {};
     for (const slot of slots) {
       const el = document.createElement('div');
       const item = equipped[slot];
       el.style.cssText = `
-        width:52px;height:52px;display:flex;flex-direction:column;
+        width:58px;height:58px;display:flex;flex-direction:column;
         align-items:center;justify-content:center;
-        background:${item ? 'rgba(100,200,100,0.1)' : 'rgba(40,40,40,0.6)'};
-        border:1px solid ${item ? 'rgba(100,200,100,0.3)' : 'rgba(255,255,255,0.08)'};
+        background:${item ? 'rgba(100,200,100,0.12)' : 'rgba(32,36,32,0.7)'};
+        border:1px solid ${item ? 'rgba(100,200,100,0.32)' : 'rgba(255,255,255,0.1)'};
+        border-radius:7px;
         cursor:pointer;
       `;
       const icon = document.createElement('div');
@@ -179,9 +188,9 @@ export class InventoryUI {
         const cell = document.createElement('div');
         const rarityColor = this._rarityColor(item.rarity);
         cell.style.cssText = `
-          background:rgba(40,40,40,0.7);border:1px solid ${rarityColor}44;
-          padding:6px;cursor:pointer;display:flex;flex-direction:column;
-          align-items:center;justify-content:center;min-height:60px;
+          background:rgba(30,36,30,0.86);border:1px solid ${rarityColor}44;
+          border-radius:7px;padding:7px 6px;cursor:pointer;display:flex;flex-direction:column;
+          align-items:center;justify-content:center;min-height:70px;
           transition:all 0.15s;
         `;
         cell.addEventListener('mouseenter', () => { cell.style.borderColor = rarityColor; });
@@ -270,7 +279,7 @@ export class InventoryUI {
     const btn = document.createElement('button');
     btn.textContent = text;
     btn.style.cssText = `
-      padding:4px 14px;font-size:0.7rem;cursor:pointer;
+      padding:5px 14px;font-size:0.7rem;cursor:pointer;border-radius:6px;
       background:rgba(100,200,100,0.15);color:#88ff88;
       border:1px solid rgba(100,200,100,0.4);font-family:inherit;
     `;
