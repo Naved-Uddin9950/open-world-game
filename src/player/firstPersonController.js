@@ -53,10 +53,10 @@ export class FirstPersonController {
 
     // ── Attack state ────────────────────────────────────
     this.isAttacking = false;
-    this.attackCooldown = 0.5;  // seconds between attacks
+    this.attackCooldown = 0.5;  // seconds between attacks (overridden by statScaler)
     this._attackTimer = 0;
-    this.attackRange = 3.0;
-    this.attackDamage = 0.25;
+    this.attackRange = 3.0;     // overridden by statScaler
+    this.attackDamage = 0.25;   // 0-1 scale, overridden by statScaler
     this._onAttack = null;  // callback set by Engine: (playerPos, forward, range, damage) => {}
     this._attackAnim = new AttackAnimation(camera);
 

@@ -3,6 +3,8 @@
 //                  damage, effects, and level scaling
 // ============================================================
 import * as THREE from 'three';
+import { getScaledSkill } from '../combat/skillScaler.js';
+import { calcSkillDamage, toBrainScale } from '../combat/damageCalculator.js';
 
 // ── Effect types enum ───────────────────────────────────────
 export const EFFECT = {
@@ -414,39 +416,38 @@ export class SkillSystem {
   }
 
   /**
-   * Get scaled skill stats for a given level.
+   * Get scaled skill stats for a given level + player derived stats.
    * @param {string} id
    * @param {number} level
+   * @param {object} [derivedStats] - from statScaler.computeDerivedStats()
    * @returns {object}
    */
-  getScaled(id, level = 1) {
+  getScaled(id, level = 1, derivedStats = null) {
     const base = SKILLS[id];
     if (!base) return null;
-    const mult = 1 + 0.15 * (level - 1);
-    return {
-      ...base,
-      damage: Math.round(base.damage * mult),
-      healAmount: Math.round((base.healAmount || 0) * mult),
-      shieldAmount: Math.round((base.shieldAmount || 0) * mult),
-      staminaCost: base.staminaCost, // cost doesn't scale
-    };
+    return getScaledSkill(base, level, derivedStats);
   }
 
   /**
    * Can the skill be used right now?
    * @param {string} id
-   * @param {number} currentStamina
+   * @param {number} currentStamina - on 100-scale
    * @param {object} profile - PlayerProfile.data
+   * @param {object} [derivedStats] - from statScaler
    * @returns {{ok:boolean, reason?:string}}
    */
-  canUse(id, currentStamina, profile) {
+  canUse(id, currentStamina, profile, derivedStats = null) {
     const skill = SKILLS[id];
     if (!skill) return { ok: false, reason: 'Unknown skill' };
     if (skill.passive) return { ok: false, reason: 'Passive skill' };
     if (!profile.unlockedSkills.includes(id)) return { ok: false, reason: 'Not unlocked' };
     const cd = this._cooldowns.get(id) || 0;
     if (cd > 0) return { ok: false, reason: `Cooldown ${cd.toFixed(1)}s` };
-    if (currentStamina < skill.staminaCost) return { ok: false, reason: 'Not enough stamina' };
+    // Compute actual stamina cost with endurance scaling
+    const level = profile.skillLevels[id] || 1;
+    const scaled = this.getScaled(id, level, derivedStats);
+    const cost = scaled ? scaled.staminaCost : skill.staminaCost;
+    if (currentStamina < cost) return { ok: false, reason: 'Not enough stamina' };
     return { ok: true };
   }
 
@@ -457,17 +458,18 @@ export class SkillSystem {
    * @param {THREE.Scene} scene
    * @param {THREE.Vector3} playerPos
    * @param {THREE.Vector3} playerForward
-   * @param {object} callbacks - { drainStamina, healPlayer, shieldPlayer, boostSpeed, getEnemiesInRadius }
+   * @param {object} callbacks - { drainStamina, healPlayer, shieldPlayer, boostSpeed, getEnemiesInRadius, summonWolves }
+   * @param {object} [derivedStats] - from statScaler.computeDerivedStats()
    * @returns {boolean} success
    */
-  execute(id, level, scene, playerPos, playerForward, callbacks) {
-    const skill = this.getScaled(id, level);
+  execute(id, level, scene, playerPos, playerForward, callbacks, derivedStats = null) {
+    const skill = this.getScaled(id, level, derivedStats);
     if (!skill) return false;
 
-    // Start cooldown
+    // Start cooldown (already scaled by level + agility)
     this._cooldowns.set(id, skill.cooldown);
 
-    // Drain stamina
+    // Drain stamina (already scaled by level + endurance)
     if (callbacks.drainStamina) callbacks.drainStamina(skill.staminaCost);
 
     // ── Self-buffs ──────────────────────────────────────
@@ -520,7 +522,10 @@ export class SkillSystem {
 
     // ── Summon ──────────────────────────────────────────
     if (skill.effectType === EFFECT.SUMMON) {
-      // Placeholder: just spawn a VFX
+      // Actually spawn familiar wolves via callback
+      if (callbacks.summonWolves) {
+        callbacks.summonWolves(level);
+      }
       this._spawnSummonVFX(scene, playerPos);
       return true;
     }

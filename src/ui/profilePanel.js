@@ -100,8 +100,12 @@ export class ProfilePanel {
     const stats = [
       { key: 'health', label: 'Health', val: `${d.health} / ${d.maxHealth}` },
       { key: 'stamina', label: 'Stamina', val: `${d.stamina} / ${d.maxStamina}` },
-      { key: 'strength', label: 'Strength', val: String(d.strength) },
-      { key: 'defence', label: 'Defence', val: String(d.defence) },
+      { key: 'strength', label: 'Strength', val: String(d.strength), desc: '+melee damage' },
+      { key: 'defence', label: 'Defence', val: String(d.defence), desc: '+damage reduction' },
+      { key: 'agility', label: 'Agility', val: String(d.agility || 10), desc: '+attack speed, -cooldowns' },
+      { key: 'vitality', label: 'Vitality', val: String(d.vitality || 10), desc: '+max HP' },
+      { key: 'intelligence', label: 'Intelligence', val: String(d.intelligence || 10), desc: '+skill damage' },
+      { key: 'endurance', label: 'Endurance', val: String(d.endurance || 10), desc: '-stamina costs' },
     ];
     for (const s of stats) {
       const row = document.createElement('div');
@@ -109,6 +113,7 @@ export class ProfilePanel {
       const lbl = document.createElement('span');
       lbl.style.cssText = 'color:#ccc;font-size:0.85rem;';
       lbl.textContent = `${s.label}: ${s.val}`;
+      if (s.desc) lbl.title = s.desc;
       row.appendChild(lbl);
 
       if (d.enhancementPoints > 0) {

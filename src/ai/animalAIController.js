@@ -281,6 +281,7 @@ export class AnimalAIController {
     const hitList = [];
     for (const [uuid, brain] of this._brains) {
       if (brain.isDead) continue;
+      if (brain.isFamiliar) continue; // don't hit allied familiars
       const dist = brain.position.distanceTo(playerPos);
       if (dist > attackRange) continue;
 
@@ -301,6 +302,7 @@ export class AnimalAIController {
 
   /**
    * Get all enemy brains within a radius of a position (for AoE skills).
+   * Excludes familiar wolves (they're allies).
    * Returns array of { brain, mesh }.
    */
   getEnemiesInRadius(pos, radius) {
@@ -308,6 +310,7 @@ export class AnimalAIController {
     const radiusSq = radius * radius;
     for (const [uuid, brain] of this._brains) {
       if (brain.isDead) continue;
+      if (brain.isFamiliar) continue; // skip allied familiars
       const dx = brain.position.x - pos.x;
       const dz = brain.position.z - pos.z;
       const dy = Math.abs(brain.position.y - pos.y);

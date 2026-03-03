@@ -38,6 +38,10 @@ function createDefault(name = 'Player', dob = '2000-01-01', starterSkill = 'fire
     maxStamina: 100,
     strength: 10,
     defence: 5,
+    agility: 10,
+    vitality: 10,
+    intelligence: 10,
+    endurance: 10,
     starterSkill,
     unlockedSkills: [starterSkill, 'super_speed'],
     equippedSkills: [starterSkill],  // up to 10 slots for keys 1-9,0
@@ -169,7 +173,7 @@ export class PlayerProfile {
 
   /**
    * Spend enhancement points to boost a stat.
-   * @param {'health'|'stamina'|'strength'|'defence'} stat
+   * @param {'health'|'stamina'|'strength'|'defence'|'agility'|'vitality'|'intelligence'|'endurance'} stat
    * @param {number} [amount=1]
    * @returns {boolean}
    */
@@ -190,6 +194,18 @@ export class PlayerProfile {
         break;
       case 'defence':
         this.data.defence += 2 * amount;
+        break;
+      case 'agility':
+        this.data.agility = (this.data.agility || 10) + 2 * amount;
+        break;
+      case 'vitality':
+        this.data.vitality = (this.data.vitality || 10) + 2 * amount;
+        break;
+      case 'intelligence':
+        this.data.intelligence = (this.data.intelligence || 10) + 2 * amount;
+        break;
+      case 'endurance':
+        this.data.endurance = (this.data.endurance || 10) + 2 * amount;
         break;
     }
     this.save();

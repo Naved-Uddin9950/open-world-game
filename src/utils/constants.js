@@ -155,3 +155,38 @@ export const COW_GROUP_RADIUS = 12;
 // Misc AI tuning
 export const ANIMAL_DAY_ACTIVITY = { day: 1.0, night: 0.6 };
 
+// ── Stat Multipliers (Enhancement Points → combat effect) ──
+export const STRENGTH_MELEE_MULT = 0.05;       // +5% melee damage per strength point above 10
+export const AGILITY_COOLDOWN_REDUCTION = 0.01; // 1% cooldown reduction per agility point
+export const AGILITY_ATTACK_SPEED_MULT = 0.02;  // 2% faster attack per agility point
+export const VITALITY_HP_PER_POINT = 12;        // +12 max HP per vitality point
+export const INTELLIGENCE_SKILL_MULT = 0.04;    // +4% skill damage per intelligence point
+export const ENDURANCE_STAMINA_PER_POINT = 8;   // +8 max stamina per endurance point
+export const ENDURANCE_COST_REDUCTION = 0.015;  // 1.5% stamina cost reduction per endurance point
+
+// ── Base Player Combat Stats ────────────────────────────────
+export const BASE_MELEE_DAMAGE = 25;            // base melee damage (100-scale)
+export const BASE_ATTACK_COOLDOWN = 0.5;        // seconds between melee attacks
+export const BASE_ATTACK_RANGE = 3.0;           // melee reach in meters
+export const BASE_PLAYER_DEFENCE = 5;           // base defence (damage reduction)
+export const DEFENCE_REDUCTION_FACTOR = 0.005;  // % damage blocked per defence point
+
+// ── Skill Scaling Per Level ─────────────────────────────────
+export const SKILL_DAMAGE_PER_LEVEL = 0.18;     // +18% damage per skill level above 1
+export const SKILL_COOLDOWN_REDUCTION_PER_LEVEL = 0.05; // 5% CD reduction per skill level
+export const SKILL_STAMINA_REDUCTION_PER_LEVEL = 0.03;  // 3% cost reduction per skill level
+
+// ── Familiar Wolf Constants ─────────────────────────────────
+export const FAMILIAR_WOLF_BASE_HP = 0.8;       // 0-1 scale
+export const FAMILIAR_WOLF_BASE_DAMAGE = 0.12;  // 0-1 scale per hit
+export const FAMILIAR_WOLF_BASE_SPEED = 4.0;    // meters/sec
+export const FAMILIAR_WOLF_FOLLOW_DIST = 5.0;   // distance to keep from owner
+export const FAMILIAR_WOLF_LEASH_DIST = 25.0;   // max dist before teleporting back
+export const FAMILIAR_WOLF_AGGRO_RANGE = 12.0;  // range to auto-attack enemies
+export const FAMILIAR_WOLF_ATTACK_RANGE = 2.2;  // melee range
+export const FAMILIAR_WOLF_HP_PER_LEVEL = 0.15; // +HP per summon skill level
+export const FAMILIAR_WOLF_DMG_PER_LEVEL = 0.04;// +damage per summon skill level
+export const FAMILIAR_WOLF_COUNT_AT_LEVEL = [1, 1, 2, 2, 3]; // wolves per skill level
+export const FAMILIAR_WOLF_DURATION_BASE = 15;  // seconds at level 1
+export const FAMILIAR_WOLF_DURATION_PER_LEVEL = 5; // +seconds per level
+

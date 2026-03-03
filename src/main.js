@@ -28,6 +28,11 @@ import { SkillSystem, SKILLS } from './systems/skillSystem.js';
 import { EffectSystem } from './systems/effectSystem.js';
 import { ShopSystem } from './systems/shopSystem.js';
 
+// ── Combat / Stats ──────────────────────────────────────────
+import { computeDerivedStats } from './combat/statScaler.js';
+import { calcMeleeDamage, toBrainScale } from './combat/damageCalculator.js';
+import { SummonWolfManager } from './skills/summonWolf.js';
+
 // ── UI ──────────────────────────────────────────────────────
 import { MainMenu } from './ui/mainMenu.js';
 import { PauseMenu } from './ui/pauseMenu.js';
@@ -73,6 +78,12 @@ class Engine {
         this.skillSystem = new SkillSystem();
         this.effectSystem = new EffectSystem();
         this.shopSystem = new ShopSystem(this.profile);
+
+        // ── Derived stats cache (recomputed on profile sync) ─
+        this._derivedStats = computeDerivedStats(this.profile.data);
+
+        // ── Summon Wolf Manager ─────────────────────────────
+        this.summonWolfManager = new SummonWolfManager(this.gameScene.raw);
 
         // ── World ───────────────────────────────────────────
         this.worldManager = new WorldManager(this.gameScene.raw, this.player, this.assetLoader);
@@ -121,6 +132,19 @@ class Engine {
             }
             return false;
         });
+
+        // ── Wire player damage → familiar wolf aggro ────────
+        const origTakeDamage = this.player.takeDamage.bind(this.player);
+        this.player.takeDamage = (amount) => {
+            origTakeDamage(amount);
+            // Tell familiars to defend — find nearest enemy in small radius
+            if (this.summonWolfManager && this.summonWolfManager.activeCount > 0 && this.animalAI) {
+                const enemies = this.animalAI.getEnemiesInRadius(this.player.getPosition(), 10);
+                if (enemies.length > 0) {
+                    this.summonWolfManager.aggroAll(enemies[0]);
+                }
+            }
+        };
 
         // ── Wire player death ───────────────────────────────
         this.player.setDeathCallback(() => {
@@ -311,6 +335,7 @@ class Engine {
         // Clear effects
         this.effectSystem.clear();
         this.skillSystem.dispose();
+        if (this.summonWolfManager) this.summonWolfManager.disposeAll();
 
         // Spawn at origin
         const spawnY = this.worldManager.getHeightAt(0, 0);
@@ -338,18 +363,23 @@ class Engine {
 
     /**
      * Sync profile stats → player controller.
-     * Profile uses integers (100), controller uses 0-1 floats.
+     * Uses computeDerivedStats for stat-based combat values.
      */
     _syncProfileToPlayer() {
         const d = this.profile.data;
-        // Convert profile maxHealth (100+) to controller scale
-        // Controller works on 0-1, but we keep ratios
-        this.player.maxHealth = d.maxHealth / 100;
-        this.player.health = d.health / 100;
-        this.player.maxStamina = d.maxStamina / 100;
-        this.player.stamina = d.stamina / 100;
-        // Strength affects attack damage (base 0.25, scaled by strength)
-        this.player.attackDamage = 0.25 * (d.strength / 10);
+        const ds = computeDerivedStats(d);
+        this._derivedStats = ds;
+
+        // Convert to controller 0-1 scale
+        this.player.maxHealth = ds.maxHealth / 100;
+        this.player.health = Math.min(d.health, ds.maxHealth) / 100;
+        this.player.maxStamina = ds.maxStamina / 100;
+        this.player.stamina = Math.min(d.stamina, ds.maxStamina) / 100;
+
+        // Stats-based melee combat
+        this.player.attackDamage = ds.meleeDamage01;
+        this.player.attackCooldown = ds.attackCooldown;
+        this.player.attackRange = ds.attackRange;
     }
 
     /**
@@ -374,7 +404,7 @@ class Engine {
 
         if (leveledUp) {
             this.gameHUD.showToast(`LEVEL UP! You are now level ${this.profile.data.level}`, '#ffcc00');
-            this._syncProfileToPlayer();
+            this._syncProfileToPlayer(); // recalculates derived stats
         }
 
         // Random skill point drop
@@ -404,7 +434,7 @@ class Engine {
         if (!d.unlockedSkills.includes(skillId)) return;
 
         const currentStamina = this.player.stamina * 100; // convert back to integer scale
-        const check = this.skillSystem.canUse(skillId, currentStamina, d);
+        const check = this.skillSystem.canUse(skillId, currentStamina, d, this._derivedStats);
         if (!check.ok) {
             this.gameHUD.showToast(check.reason, '#ff6666');
             return;
@@ -417,6 +447,8 @@ class Engine {
         const animalAI = this.animalAI;
         const effectSys = this.effectSystem;
         const playerCtrl = this.player;
+        const derivedStats = this._derivedStats;
+        const summonMgr = this.summonWolfManager;
 
         const success = this.skillSystem.execute(skillId, level, scene, playerPos, forward, {
             drainStamina: (amount) => {
@@ -451,7 +483,12 @@ class Engine {
                     effectSys.applyToEnemy(target, effectType, effectDuration, dotDmg, { knockDir });
                 }
             },
-        });
+            summonWolves: (skillLevel) => {
+                const spawned = summonMgr.spawn(playerPos, playerCtrl.player, skillLevel);
+                const count = spawned.length;
+                this.gameHUD.showToast(`Summoned ${count} familiar wolf${count > 1 ? 'ves' : ''}!`, '#6688ff');
+            },
+        }, derivedStats);
 
         if (success) {
             const skill = SKILLS[skillId];
@@ -618,6 +655,16 @@ class Engine {
 
         // Animals AI
         if (this.animalAI) this.animalAI.update(dt);
+
+        // Familiar wolves
+        if (this.summonWolfManager && this.summonWolfManager.activeCount > 0) {
+            const playerPos = this.player.getPosition();
+            const nearbyEnemies = this.animalAI
+                ? this.animalAI.getEnemiesInRadius(playerPos, 20)
+                : [];
+            const getHeight = (x, z) => this.worldManager.getHeightAt(x, z);
+            this.summonWolfManager.update(dt, nearbyEnemies, getHeight);
+        }
 
         // Day/Night cycle
         this.dayNightCycle.update(this.player.getPosition());
