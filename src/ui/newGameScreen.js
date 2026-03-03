@@ -100,6 +100,7 @@ export class NewGameScreen {
 
     // Humanoid mesh
     const mesh = createPlayerCharacterMesh(this._appearance);
+    mesh.visible = true; // ensure visible in preview
     scene.add(mesh);
 
     this._previewRenderer = renderer;
@@ -125,6 +126,7 @@ export class NewGameScreen {
     if (!this._previewScene || !this._previewMesh) return;
     this._previewScene.remove(this._previewMesh);
     this._previewMesh = createPlayerCharacterMesh(this._appearance);
+    this._previewMesh.visible = true;
     this._previewScene.add(this._previewMesh);
   }
 

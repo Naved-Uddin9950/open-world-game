@@ -47,6 +47,8 @@ import { getItem, getItemsByCategory } from './inventory/itemDatabase.js';
 import { GuildSystem } from './guild/guildSystem.js';
 import { QuestManager } from './quests/questManager.js';
 import { CameraController, CAMERA_MODE } from './camera/cameraController.js';
+import { GatheringSystem } from './systems/gatheringSystem.js';
+import { WaypointSystem } from './systems/waypointSystem.js';
 
 // ── UI ──────────────────────────────────────────────────────
 import { MainMenu } from './ui/mainMenu.js';
@@ -94,6 +96,11 @@ class Engine {
         this._gameStarted = false;
         this._gameOver = false;
 
+        /** Safe pointer lock request — avoids NotAllowedError when no user gesture. */
+        this._safePointerLock = () => {
+            try { this.canvas.requestPointerLock(); } catch (_) { /* no user gesture */ }
+        };
+
         // ── Core modules ────────────────────────────────────
         this.renderer = new EngineRenderer(this.canvas, 'LOW');
         this.gameScene = new GameScene();
@@ -109,6 +116,7 @@ class Engine {
 
         // ── Player character mesh (visible in 3rd person) ───
         this._playerMesh = createPlayerCharacterMesh();
+        this._playerMesh.visible = (this._cameraMode !== CAMERA_MODE.FIRST_PERSON);
         this.player.player.add(this._playerMesh);  // child of player Object3D
 
         // ── RPG Systems ─────────────────────────────────────
@@ -154,6 +162,12 @@ class Engine {
         this.perfMonitor = new PerformanceMonitor({ targetFPS: 30 });
         this.autoQuality = new AutoQualitySystem(this.renderer, this.perfMonitor);
         this.saveSystem = new SaveSystem();
+
+        // ── Gathering System ────────────────────────────────
+        this.gatheringSystem = new GatheringSystem(this.gameScene.raw, this.worldManager);
+
+        // ── Waypoint System ─────────────────────────────────
+        this.waypointSystem = new WaypointSystem(this.gameScene.raw, this.gameCamera.raw);
 
         // Show FPS overlay
         this.perfMonitor.showHUD(true);
@@ -232,7 +246,7 @@ class Engine {
             if (this.worldMapUI.isVisible()) {
                 this.worldMapUI.hide();
                 this._paused = false;
-                this.canvas.requestPointerLock();
+                this._safePointerLock();
             } else {
                 this.profilePanel.hide(); this.skillTreeUI.hide(); this.shopUI.hide();
                 this.questUI.hide(); this.inventoryUI.hide(); this.guildUI.hide();
@@ -249,10 +263,13 @@ class Engine {
                 const modeName = this.cameraController.getModeName();
                 this._cameraMode = newMode;
                 this.gameHUD.showToast(`Camera: ${modeName}`, '#aaccff');
+                this.gameHUD.setCameraMode(modeName);
                 // Show/hide player mesh based on mode
                 if (this._playerMesh) {
                     this._playerMesh.visible = (newMode !== CAMERA_MODE.FIRST_PERSON);
                 }
+                // Tell FP controller about new camera mode
+                this.player.setCameraMode(newMode);
             }
         });
 
@@ -265,6 +282,39 @@ class Engine {
         this.player.setScrollCallback((delta) => {
             if (this.cameraController) {
                 this.cameraController.handleScroll(delta);
+            }
+        });
+
+        // ── Wire E/F interaction → gathering ────────────────
+        this.player.setInteractCallback(() => {
+            this._handleInteract();
+        });
+
+        // ── Wire gathering → guild progress + inventory ─────
+        this.gatheringSystem.setGatherCallback((type, count) => {
+            // Report to guild missions
+            if (this.guildSystem) {
+                const completed = this.guildSystem.reportProgress(type, count);
+                for (const m of completed) {
+                    this.gameHUD.showToast(`Mission Complete: ${m.title}!`, '#88ff44');
+                    if (m.goldReward && this.inventorySystem) {
+                        this.inventorySystem.addGold(m.goldReward);
+                        this.gameHUD.showToast(`+${m.goldReward} Gold`, '#ffdd44');
+                    }
+                }
+            }
+            // Add to inventory
+            if (this.inventorySystem) {
+                this.inventorySystem.addItem(type, count);
+            }
+        });
+
+        // ── Wire guild mission acceptance → waypoint ────────
+        this.guildSystem.setMissionCompleteCallback((mission) => {
+            // When a tracked mission completes, clear waypoint
+            if (this.waypointSystem && this.waypointSystem.missionId === mission.id) {
+                this.waypointSystem.clearWaypoint();
+                this.gameHUD.hideWaypoint();
             }
         });
 
@@ -493,7 +543,7 @@ class Engine {
         this.questUI.showTracker();
         // Sync mode label to pause menu
         this.pauseMenu.setGameMode(this._gameMode);
-        this.canvas.requestPointerLock();
+        this._safePointerLock();
     }
 
     async _startNewGame(name, dob, starterSkill, gameMode = 'singleplayer', appearance = null, statAllocation = null) {
@@ -584,7 +634,7 @@ class Engine {
         this.pauseMenu.setGameMode(this._gameMode);
         // Init guild mission board
         this.guildSystem.refreshMissionBoard(5);
-        this.canvas.requestPointerLock();
+        this._safePointerLock();
 
         this.gameHUD.showToast(`Welcome, ${name}! Your adventure begins.`, '#aaddaa');
     }
@@ -821,13 +871,28 @@ class Engine {
         }
     }
 
+    /** Handle E/F interaction key — gather closest resource. */
+    _handleInteract() {
+        if (!this._gameStarted || this._paused || this._gameOver) return;
+        if (this.player.isDead) return;
+
+        const playerPos = this.player.getPosition();
+        const closest = this.gatheringSystem.getClosestNode(playerPos);
+        if (!closest) return;
+
+        const result = this.gatheringSystem.gather(closest.key);
+        if (result) {
+            this.gameHUD.showToast(`Gathered: ${result.label}`, '#88ff88');
+        }
+    }
+
     /** Toggle overlay panels (profile, skill tree, shop, quests, inventory, guild, map). */
     _toggleOverlay(panel) {
         if (!this._gameStarted || this._gameOver) return;
         if (panel.isVisible()) {
             panel.hide();
             this._paused = false;
-            this.canvas.requestPointerLock();
+            this._safePointerLock();
         } else {
             // Close any other overlays
             this.profilePanel.hide();
@@ -886,7 +951,7 @@ class Engine {
         this.guildUI.hide();
         this.worldMapUI.hide();
         this._paused = false;
-        this.canvas.requestPointerLock();
+        this._safePointerLock();
     }
 
     /** Show world map with updated player position and discovered zones. */

@@ -104,6 +104,38 @@ export class GameHUD {
     `;
     el.appendChild(this._shieldIndicator);
 
+    // ── Camera mode indicator (bottom-left) ─────────────
+    this._cameraModeLabel = document.createElement('div');
+    this._cameraModeLabel.style.cssText = `
+      position:fixed;bottom:14px;left:14px;
+      background:rgba(0,0,0,0.55);border:1px solid rgba(120,160,255,0.3);
+      padding:4px 10px;font-size:0.72rem;color:#aaccff;
+      font-family:monospace;letter-spacing:0.04em;
+      pointer-events:none;
+    `;
+    this._cameraModeLabel.textContent = '\uD83C\uDFA5 First Person [V]';
+    el.appendChild(this._cameraModeLabel);
+
+    // ── Interaction prompt (center screen) ──────────────
+    this._interactionPrompt = document.createElement('div');
+    this._interactionPrompt.style.cssText = `
+      position:fixed;top:55%;left:50%;transform:translate(-50%,-50%);
+      background:rgba(0,0,0,0.6);border:1px solid rgba(100,200,100,0.4);
+      padding:6px 16px;font-size:0.85rem;color:#88ff88;
+      font-family:monospace;display:none;pointer-events:none;
+    `;
+    el.appendChild(this._interactionPrompt);
+
+    // ── Waypoint indicator (top-center) ─────────────────
+    this._waypointIndicator = document.createElement('div');
+    this._waypointIndicator.style.cssText = `
+      position:fixed;top:100px;left:50%;transform:translateX(-50%);
+      background:rgba(0,0,0,0.5);border:1px solid rgba(255,200,80,0.4);
+      padding:4px 14px;font-size:0.78rem;color:#ffcc55;
+      font-family:monospace;display:none;pointer-events:none;
+    `;
+    el.appendChild(this._waypointIndicator);
+
     document.body.appendChild(el);
     this._el = el;
   }
@@ -294,6 +326,35 @@ export class GameHUD {
 
   hide() {
     if (this._el) this._el.style.display = 'none';
+  }
+
+  /** Update camera mode label. */
+  setCameraMode(modeName) {
+    if (this._cameraModeLabel) {
+      this._cameraModeLabel.textContent = `\uD83C\uDFA5 ${modeName} [V]`;
+    }
+  }
+
+  /** Show/hide interaction prompt (e.g., "[E] Gather Herb"). */
+  showInteraction(text) {
+    if (this._interactionPrompt) {
+      this._interactionPrompt.textContent = text;
+      this._interactionPrompt.style.display = 'block';
+    }
+  }
+  hideInteraction() {
+    if (this._interactionPrompt) this._interactionPrompt.style.display = 'none';
+  }
+
+  /** Show/hide waypoint distance indicator. */
+  showWaypoint(text) {
+    if (this._waypointIndicator) {
+      this._waypointIndicator.textContent = text;
+      this._waypointIndicator.style.display = 'block';
+    }
+  }
+  hideWaypoint() {
+    if (this._waypointIndicator) this._waypointIndicator.style.display = 'none';
   }
 
   dispose() {

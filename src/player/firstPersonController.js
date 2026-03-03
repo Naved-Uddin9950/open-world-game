@@ -65,6 +65,9 @@ export class FirstPersonController {
     this._onEscape = null;    // called when ESC pressed
     this._onSkillUse = null;  // called when number key pressed: (key) => void
 
+    /** Camera mode flag — when not 'firstPerson', skip euler mouse look. */
+    this._cameraMode = 'firstPerson';
+
     // ── HUD elements ────────────────────────────────────
     this._hudCreated = false;
 
@@ -122,6 +125,9 @@ export class FirstPersonController {
     if (this._onMouseInput) {
       this._onMouseInput(e.movementX, e.movementY);
     }
+
+    // Only apply euler mouse-look in first-person mode
+    if (this._cameraMode !== 'firstPerson') return;
 
     this._euler.setFromQuaternion(this.camera.quaternion);
 
@@ -200,6 +206,10 @@ export class FirstPersonController {
         break;
       case "KeyM":
         if (this._onOpenMap) this._onOpenMap();
+        break;
+      case "KeyE":
+      case "KeyF":
+        if (this._onInteract) this._onInteract();
         break;
     }
   }
@@ -353,12 +363,14 @@ export class FirstPersonController {
   setOpenSkillTreeCallback(fn) { this._onOpenSkillTree = fn; }
   setOpenShopCallback(fn) { this._onOpenShop = fn; }
   setCycleCameraCallback(fn) { this._onCycleCamera = fn; }
+  setCameraMode(mode) { this._cameraMode = mode; }
   setOpenQuestsCallback(fn) { this._onOpenQuests = fn; }
   setOpenInventoryCallback(fn) { this._onOpenInventory = fn; }
   setOpenGuildCallback(fn) { this._onOpenGuild = fn; }
   setOpenMapCallback(fn) { this._onOpenMap = fn; }
   setMouseInputCallback(fn) { this._onMouseInput = fn; }
   setScrollCallback(fn) { this._onScroll = fn; }
+  setInteractCallback(fn) { this._onInteract = fn; }
 
   /**
    * Set the attack callback (called by Engine after AI controller is created).
