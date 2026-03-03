@@ -56,7 +56,7 @@ export class ForestManager {
         if (this._chunkVegetation.has(key)) return;
 
         const treePlacements = this._sampleTrees(cx, cz);
-        const grassPlacements = this._sampleGrass(cx, cz);
+        const grassPlacements = [];
         const rockPlacements = this._sampleRocks(cx, cz);
 
         const trees = this._treeSystem.createChunkTrees(treePlacements);
