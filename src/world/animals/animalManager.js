@@ -25,15 +25,8 @@ export class AnimalManager {
         this._terrain = terrainGen;
         this._noise = new SimplexNoise(seed * 2.71828);
         this._chunkAnimals = new Map();
-        this._assetLoader = assetLoader;
-        this._models = {}; // loaded GLTF scenes by type
         // per-type scale overrides (can be changed at runtime)
         this._scaleOverrides = options.scaleOverrides || {};
-
-        // Attempt to preload models if an asset loader is available
-        if (this._assetLoader) {
-            this._preloadModels(['cow', 'deer', 'wolf', 'chicken']);
-        }
     }
 
     loadChunkAnimals(cx, cz) {
@@ -114,39 +107,8 @@ export class AnimalManager {
         this._envColliders = this._envColliders.filter(o => !objects.includes(o));
     }
 
-    async _preloadModels(types) {
-        for (const t of types) {
-            const candidates = [
-                `assets/models/${t}.glb`,
-                `assets/models/${t}/${t}.glb`,
-                `assets/models/${t}/source/${t}.glb`,
-                `assets/models/${t}/source/GLB_${t.charAt(0).toUpperCase() + t.slice(1)}.glb`,
-                `assets/models/${t}/source/GLB_${t.toUpperCase()}.glb`,
-                `assets/models/${t}/model.glb`,
-                `assets/models/${t}/source/model.glb`,
-            ];
-
-            let loaded = null;
-            for (const url of candidates) {
-                try {
-                    const res = await this._assetLoader.loadModel(url);
-                    if (res) {
-                        loaded = res;
-                        console.debug(`[AnimalManager] Loaded model for ${t} from ${url}`);
-                        break;
-                    }
-                } catch (e) {
-                    // try next candidate
-                }
-            }
-
-            if (loaded) {
-                if (loaded.scene) this._models[t] = loaded.scene;
-                else this._models[t] = loaded;
-            } else {
-                console.warn(`[AnimalManager] Failed to load any model for ${t} from candidates`, candidates);
-            }
-        }
+    async _preloadModels() {
+        // No-op: all creatures are procedural
     }
 
     unloadChunkAnimals(cx, cz) {
@@ -257,78 +219,15 @@ export class AnimalManager {
      */
     setAnimalScale(type, scaleMultiplier) {
         this._scaleOverrides[type] = scaleMultiplier;
-        // update existing spawned animals
         for (const [key, group] of this._chunkAnimals) {
             if (!group) continue;
             for (const m of group.children) {
                 if (m.userData && m.userData.type === type) {
-                    // Existing meshes were created with finalScale = base * placementScale.
-                    // Our override represents the new 'base' multiplier, so set final scale = override * basePlacement.
                     const base = this._animalScaleFor(type);
                     const final = scaleMultiplier * base;
                     m.scale.set(final, final, final);
                 }
             }
         }
-    }
-
-    /**
-     * Auto-fit a loaded model type to a target world height (meters) by computing
-     * a scale override based on the model bounding box and current base scale.
-     * Returns the computed override multiplier or null on failure.
-     * @param {string} type
-     * @param {number} targetHeight
-     */
-    autoFitTypeHeight(type, targetHeight = 1.2) {
-        const model = this._models[type];
-        if (!model) {
-            console.warn(`[AnimalManager] autoFit: model for ${type} not loaded`);
-            return null;
-        }
-        try {
-            const box = new THREE.Box3().setFromObject(model);
-            const size = new THREE.Vector3();
-            box.getSize(size);
-            const modelHeight = size.y || Math.max(size.x, size.z) || 1;
-            const base = this._animalScaleFor(type);
-            const override = targetHeight / (modelHeight * base);
-            this.setAnimalScale(type, override);
-            console.debug('[AnimalManager] autoFitTypeHeight', type, { modelHeight, base, override, targetHeight });
-            return override;
-        } catch (e) {
-            console.warn('[AnimalManager] autoFit failed', e);
-            return null;
-        }
-    }
-
-    _createAnimalMesh(type, scale = 1.0) {
-        // Lightweight placeholder animals using boxes/spheres
-        let geom;
-        let mat;
-        switch (type) {
-            case 'cow':
-                geom = new THREE.BoxGeometry(1.6 * scale, 1.2 * scale, 0.9 * scale);
-                mat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
-                break;
-            case 'deer':
-                geom = new THREE.BoxGeometry(1.4 * scale, 1.0 * scale, 0.8 * scale);
-                mat = new THREE.MeshStandardMaterial({ color: 0xcfa16b });
-                break;
-            case 'wolf':
-                geom = new THREE.BoxGeometry(1.0 * scale, 0.6 * scale, 0.6 * scale);
-                mat = new THREE.MeshStandardMaterial({ color: 0x55565a });
-                break;
-            case 'chicken':
-                geom = new THREE.SphereGeometry(0.22 * scale, 6, 5);
-                mat = new THREE.MeshStandardMaterial({ color: 0xffffff });
-                break;
-            default:
-                geom = new THREE.BoxGeometry(1 * scale, 1 * scale, 1 * scale);
-                mat = new THREE.MeshStandardMaterial({ color: 0x999999 });
-        }
-        const m = new THREE.Mesh(geom, mat);
-        m.castShadow = true;
-        m.receiveShadow = false;
-        return m;
     }
 }
